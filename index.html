@@ -666,7 +666,7 @@ function cgUrl(path){
   return 'https://api.coingecko.com/api/v3' + path + sep + 'x_cg_demo_api_key=' + CG_API_KEY;
 }
 
-const CG_IDS = {"BTC": "bitcoin", "ETH": "ethereum", "XRP": "ripple", "QNT": "quant-network", "TAO": "bittensor", "CC": "canton-network", "XLM": "stellar", "HBAR": "hedera-hashgraph", "XDC": "xdce-crowd-sale", "ALGO": "algorand", "IOTA": "iota", "AERO": "aerodrome-finance", "FLR": "flare-network", "ZORA": "zora"};
+const CG_IDS = {"BTC": "bitcoin", "ETH": "ethereum", "XRP": "ripple", "QNT": "quant-network", "TAO": "bittensor", "CC": "canton-network", "XLM": "stellar", "HBAR": "hedera-hashgraph", "XDC": "xdce-crowd-sale", "ALGO": "algorand", "IOTA": "iota", "AERO": "aerodrome-finance", "FLR": "flare-networks", "ZORA": "zora"};
 
 const TIER_ORDER = ['REFERENCE','CORE','TIER1','TIER2'];
 const TIER_GRID = {REFERENCE:'ref-grid', CORE:'core-grid', TIER1:'t1-grid', TIER2:'t2-grid'};
@@ -1078,7 +1078,7 @@ function showStep(n){
 function autoSlug(){
   const t=document.getElementById('inp-ticker').value.trim().toLowerCase();
   const known={hbar:'hedera-hashgraph',xdc:'xdce-crowd-sale',tao:'bittensor',
-    aero:'aerodrome-finance',flr:'flare-network',xlm:'stellar',qnt:'quant-network',
+    aero:'aerodrome-finance',flr:'flare-networks',xlm:'stellar',qnt:'quant-network',
     xrp:'ripple',btc:'bitcoin',eth:'ethereum',algo:'algorand',iota:'iota',
     cc:'canton-network',zora:'zora'};
   const slug=known[t]||t.replace(/[^a-z0-9]/g,'-');
