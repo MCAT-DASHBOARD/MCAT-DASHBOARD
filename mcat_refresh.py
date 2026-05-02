@@ -1348,7 +1348,8 @@ def run_pipeline(local_mode=False):
             trend_2w_val = compute_trend(pct40_series)
 
             if dpo20_pct_today is not None:
-                print(f"    {ticker}: PC20={dpo20_pct_today:.1f}, PC40={dpo40_pct_today:.1f if dpo40_pct_today else '?'}, trend={trend_1w_val}/{trend_2w_val}")
+                dpo40_str = f"{dpo40_pct_today:.1f}" if dpo40_pct_today is not None else "?"
+                print(f"    {ticker}: PC20={dpo20_pct_today:.1f}, PC40={dpo40_str}, trend={trend_1w_val}/{trend_2w_val}")
 
         # Get previous state for this asset (None on first run triggers bootstrap)
         prev = prev_states.get(ticker) if prev_states else None
