@@ -857,6 +857,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
 .wave-arr.arr-up{color:var(--green);}
 .wave-arr.arr-dn{color:var(--red);}
 .wave-divider{border-top:1px solid #252525;margin:8px 0 5px;}
+.wave-section-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--sub);padding:0 0 4px 2px;}
 .wave-legend{display:flex;gap:18px;margin-top:14px;padding-top:10px;
   border-top:1px solid #1e1e1e;}
 .legend-item{display:flex;align-items:center;gap:7px;font-size:11px;
@@ -1801,7 +1802,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
     <div class="ctx-tt">
       <div class="ctx-tt-title">CYCLE DAY COUNTER</div>
       <div class="ctx-tt-body">Days since the DPO buy signal fired. The average cycle runs about 100 days from signal to the next meaningful move.</div>
-      <div class="ctx-tt-tech">Signal date: Feb 13, 2026. Cycle mean: 104d (M38). Range: 60-120d typical.</div>
+      <div class="ctx-tt-tech" id="ctx-day-tooltip-tech">Active signals tracked from pipeline data. Cycle mean: 104d (M38). Range: 60-120d typical.</div>
     </div>
   </div>
 
@@ -1838,7 +1839,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
     <div class="ctx-tt">
       <div class="ctx-tt-title">ZONE 2 COUNTDOWN</div>
       <div class="ctx-tt-body">Days remaining in the optimal entry window. After this closes, Zone 3 begins — historically waiting destroys value (−51pp EV drop, +27.5% higher entry cost).</div>
-      <div class="ctx-tt-tech">Zone 2 closes ~Day 25. Signal date Feb 13 → closes ~Mar 9. Ref: M54, M63.</div>
+      <div class="ctx-tt-tech" id="ctx-z2-tooltip-tech">Zone 2 closes ~Day 25 post-signal. Updates when active signals change. Ref: M54, M63.</div>
     </div>
   </div>
 
@@ -1954,7 +1955,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
     <div class="mqs-block" style="position:relative;cursor:help;" onmouseenter="this.querySelector('.mqs-tt').style.display='block'" onmouseleave="this.querySelector('.mqs-tt').style.display='none'">
       <div class="mqs-block-title">ENTRY</div>
       <span class="ctx-pill ctx-pill-green">ZONE 2</span>
-      <span class="mqs-ev-sub" style="color:#d0d0d8;">Closes <span style="color:var(--green);font-weight:700">~11d</span> · Mar 9</span>
+      <span class="mqs-ev-sub" style="color:#d0d0d8;">Closes <span id="mqs-z2-days" style="color:var(--green);font-weight:700">~11d</span> · <span id="mqs-z2-date">Mar 9</span></span>
       <div class="mqs-tt" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:400;background:#141420;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;width:340px;box-shadow:0 10px 32px rgba(0,0,0,0.8);white-space:normal;">
         <div style="font-size:14px;font-family:'Space Mono',monospace;font-weight:700;color:#00ccdd;letter-spacing:1.5px;margin-bottom:8px;">ENTRY OPTIMIZER</div>
         <div style="font-size:13px;color:#d0d0d8;line-height:1.7;">Zone 2 is the optimal entry window — historically the best risk-adjusted returns. After this closes, waiting typically destroys value.</div>
@@ -2182,7 +2183,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
 <div style="min-height:40vh;"></div>
 
 <footer>
-  <span>Dr. Bob's MCAT v5.0 · Live · CoinGecko API</span>
+  <span>Dr. Bob's MCAT v6.1 · Live · CoinGecko API</span>
   <span id="footer-time">Seed data as of Feb 21, 2026 — refresh for live data</span>
 </footer>
 
@@ -2296,7 +2297,7 @@ function renderCachedAnalysis(resultDivId, responseText, timestamp, refreshFn) {
 
   const cacheTime = new Date(timestamp);
   const hoursAgo = (new Date() - cacheTime) / (1000 * 60 * 60);
-  const isFresh = hoursAgo < 24;
+  const isFresh = hoursAgo < 6;
 
   const timeStr = cacheTime.toLocaleDateString('en-US', {
     month: 'short', day: 'numeric'
@@ -2936,7 +2937,7 @@ function renderMqsCardBadges() {
     textColor = '#8a8a8a';
   } else if (mqs.tier === 'RED') {
     badgeText = 'REDUCED CONVICTION';
-    sizingText = '20–40% SIZE';
+    sizingText = (mqs.sizing || '20–30%') + ' SIZE';
     bgColor = 'rgba(255,60,60,0.12)';
     textColor = '#ff3c3c';
   }
@@ -3089,7 +3090,29 @@ function renderMqsStrip() {
 function updateMacroStrip() { renderMqsStrip(); }
 
 function updateContextStrip() {
-  const signalDate = new Date('2026-02-13');
+  // Find the most recent active signal date from pipeline data
+  // Fallback to MQS_STATE.signalDate (user-configurable, default '2026-02-13') if pipeline unavailable
+  let signalDateStr = (typeof MQS_STATE !== 'undefined' && MQS_STATE.signalDate) ? MQS_STATE.signalDate : '2026-02-13';
+  let signalAsset = null;
+  let activeSignalCount = 0;
+
+  if (window._pipelineAssetStates) {
+    const activeSignals = [];
+    for (const [ticker, state] of Object.entries(window._pipelineAssetStates)) {
+      if (state && state.signal_active === true && state.signal_date) {
+        activeSignals.push({ ticker, date: state.signal_date });
+      }
+    }
+    activeSignalCount = activeSignals.length;
+    if (activeSignals.length > 0) {
+      // Pick the most recent active signal date — most relevant for "should I still enter?"
+      activeSignals.sort((a, b) => b.date.localeCompare(a.date));
+      signalDateStr = activeSignals[0].date;
+      signalAsset = activeSignals[0].ticker;
+    }
+  }
+
+  const signalDate = new Date(signalDateStr + 'T00:00:00');
   const now = new Date();
   const dayNum = Math.floor((now - signalDate) / 86400000);
   const cycleMean = 100;
@@ -3098,30 +3121,71 @@ function updateContextStrip() {
   const z2CloseDate = new Date(signalDate);
   z2CloseDate.setDate(z2CloseDate.getDate() + z2CloseDay);
   const z2CloseStr = z2CloseDate.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  const sigDateStr = signalDate.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
 
+  // Update Day counter
   const dayEl = document.getElementById('ctx-day-num');
   if (dayEl) dayEl.textContent = 'DAY ' + dayNum;
 
+  // Update progress dot position
   const dotEl = document.getElementById('ctx-prog-dot');
   if (dotEl) dotEl.style.left = Math.min(95, Math.max(2, (dayNum / cycleMean) * 100)) + '%';
 
-  const cdDays = document.getElementById('ctx-countdown-days');
-  const cdDate = document.getElementById('ctx-countdown-date');
-  if (cdDays && cdDate) {
-    if (daysToZ2Close > 0) {
+  // Update the Day Counter tooltip with current signal info
+  const dayTipEl = document.getElementById('ctx-day-tooltip-tech');
+  if (dayTipEl) {
+    if (activeSignalCount > 0 && signalAsset) {
+      dayTipEl.textContent = `Most recent active signal: ${signalAsset} on ${sigDateStr}. ${activeSignalCount} active signal${activeSignalCount===1?'':'s'} total. Cycle mean: 104d (M38). Range: 60-120d typical.`;
+    } else if (window._pipelineAssetStates) {
+      dayTipEl.textContent = `No active signals currently. Last reference date: ${sigDateStr}. Cycle mean: 104d (M38). Range: 60-120d typical.`;
+    } else {
+      dayTipEl.textContent = `Reference signal date: ${sigDateStr} (pipeline data not yet loaded). Cycle mean: 104d (M38). Range: 60-120d typical.`;
+    }
+  }
+
+  // Helper to update a pair of countdown elements (used for both the ctx-* and mqs-* sets)
+  function updateCountdownPair(daysElId, dateElId) {
+    const cdDays = document.getElementById(daysElId);
+    const cdDate = document.getElementById(dateElId);
+    if (!cdDays || !cdDate) return;
+    if (activeSignalCount === 0 && window._pipelineAssetStates) {
+      // Pipeline loaded, no active signals
+      cdDays.textContent = '—';
+      cdDays.style.color = 'var(--sub)';
+      cdDate.textContent = 'no active signals';
+    } else if (daysToZ2Close > 0) {
       cdDays.textContent = '~' + daysToZ2Close + 'd';
       cdDays.style.color = daysToZ2Close <= 3 ? 'var(--red)' : 'var(--green)';
       cdDate.textContent = z2CloseStr;
     } else {
       cdDays.textContent = 'CLOSED';
       cdDays.style.color = 'var(--red)';
-      cdDate.textContent = '';
-      // Update zone pill
-      const zonePill = document.getElementById('ctx-zone-pill');
-      if (zonePill) {
-        zonePill.textContent = 'Zone 3 Active';
-        zonePill.className = 'ctx-pill ctx-pill-red';
-      }
+      cdDate.textContent = `(was ${z2CloseStr})`;
+    }
+  }
+
+  // Update both sets of countdown displays (top context strip AND MQS Entry block)
+  updateCountdownPair('ctx-countdown-days', 'ctx-countdown-date');
+  updateCountdownPair('mqs-z2-days', 'mqs-z2-date');
+
+  // Update the Z2 tooltip with current signal info
+  const z2TipEl = document.getElementById('ctx-z2-tooltip-tech');
+  if (z2TipEl) {
+    if (activeSignalCount > 0 && signalAsset) {
+      z2TipEl.textContent = `Zone 2 closes ~Day 25 post-signal. Most recent: ${signalAsset} signal ${sigDateStr} → Z2 closes ${z2CloseStr}. Ref: M54, M63.`;
+    } else if (window._pipelineAssetStates) {
+      z2TipEl.textContent = `Zone 2 closes ~Day 25 post-signal. No active signals currently — countdown reflects last reference. Ref: M54, M63.`;
+    } else {
+      z2TipEl.textContent = `Zone 2 closes ~Day 25 post-signal. Ref: M54, M63.`;
+    }
+  }
+
+  // Update zone pill if Zone 2 has closed
+  if (daysToZ2Close === 0 && activeSignalCount > 0) {
+    const zonePill = document.getElementById('ctx-zone-pill');
+    if (zonePill) {
+      zonePill.textContent = 'Zone 3 Active';
+      zonePill.className = 'ctx-pill ctx-pill-red';
     }
   }
 }
@@ -4785,6 +4849,7 @@ function renderWavePanel(ticker, a){
   html+=buildWaveRowHTML('8h',v8h,t8h);
   html+=buildWaveRowHTML('12h',v12h,t12h);
   html+='<div class="wave-divider"></div>';
+  html+='<div class="wave-section-label">MARKET CYCLE · TOTAL3</div>';
   html+=buildWaveRowHTML('1w',g.v1w,g.t1w,{isCycle:true});
   html+=buildWaveRowHTML('2w',g.v2w,g.t2w,{isCycle:true});
 
@@ -4990,9 +5055,11 @@ function renderVerdict(ticker){
   const isBtc = ticker === 'BTC';
 
   // Cycle state
-  const signalDate = new Date(MQS_STATE.signalDate);
-  const today = new Date();
-  const cycleDay = Math.floor((today - signalDate) / (1000*60*60*24));
+  const auto = liveData[ticker]?.automation;
+  const hasActiveSignal = auto?.signal_active === true;
+  const cycleDay = hasActiveSignal
+    ? (auto.signal_days_ago ?? Math.floor((new Date() - new Date(MQS_STATE.signalDate)) / 86400000))
+    : null;
   // Zone 2 = both 1W and 2W oscillators below 20 (the buy zone)
   const zoneOpen = a.l2['1w'].val < 20 && a.l2['2w'].val < 20;
 
@@ -5030,7 +5097,7 @@ function renderVerdict(ticker){
   } else {
     sizing = (isBtc ? BTC_SIZING : ALT_SIZING)[tier];
   }
-  const sizingStr = sizing ? (sizing[confLevel] || sizing.low || '—') : '—';
+  const sizingStr = mqs.sizing || '—';
 
   // Card color
   const card = document.getElementById('an-verdict-card');
@@ -5053,7 +5120,7 @@ function renderVerdict(ticker){
     </div>
     <div class="verdict-pill pill-neutral">
       <div class="verdict-pill-label">CYCLE DAY</div>
-      <div class="verdict-pill-val">${cycleDay} of ${MQS_STATE.cycleLength}</div>
+      <div class="verdict-pill-val">${hasActiveSignal ? cycleDay : '—'} of ${MQS_STATE.cycleLength}</div>
     </div>
     <div class="verdict-pill ${zonePillCls}">
       <div class="verdict-pill-label">ZONE 2</div>
@@ -5100,7 +5167,7 @@ function getMqsNarrative(mqs, ticker) {
     return 'Markets are calm (GREEN tier), but post-2022 data shows calm conditions produce weaker signals: 34% hit rate, -7.2% average EV (n=29). Routine pullbacks in bull markets often aren\u2019t real opportunities. Conservative sizing recommended.';
   }
   if (mqs.tier === 'RED') {
-    return 'Elevated macro risk (RED tier). Signals still fire and can be profitable, but confidence is reduced. Position sizing should be conservative at 20\u201340% of intended allocation to limit downside exposure.';
+    return `Elevated macro risk (RED tier). Signals still fire and can be profitable, but confidence is reduced. Position sizing should be conservative at ${mqs.sizing} of intended allocation to limit downside exposure.`;
   }
   return '';
 }
@@ -5163,7 +5230,10 @@ function renderMqsMacroContext(ticker) {
 
 function computeConfidence(){
   const a = liveData[currentAnalyzeTicker];
-  const dpoBothBelow20 = a && a.l2['1w'].val < 20 && a.l2['2w'].val < 20;
+  const _autoConf = liveData[currentAnalyzeTicker]?.automation;
+  const dpoBothBelow20 = (_autoConf?.dpo20_pct != null && _autoConf?.dpo40_pct != null)
+    ? (_autoConf.dpo20_pct < 12 && _autoConf.dpo40_pct < 12)
+    : (a && a.l2['1w'].val < 20 && a.l2['2w'].val < 20);
   const rtConfirmed = a?.automation?.right_translation === true || mcatPrefs.rightTranslation || false;
   const hurstConf = a?.automation?.hurst_confidence ?? 0.75;
   const rawScore = (dpoBothBelow20 ? 1 : 0) + (MQS_STATE.btcAbove200ma ? 1 : 0) + (MQS_STATE.spxAbove200ma ? 1 : 0) + (rtConfirmed ? 1 : 0);
@@ -5209,6 +5279,8 @@ function renderNarrativeLayers(ticker){
   // Zone 2 = both 1W and 2W oscillators below 20
   const zoneOpen = a.l2['1w'].val < 20 && a.l2['2w'].val < 20;
   const sigDateStr = signalDate.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  const autoN = liveData[ticker]?.automation;
+  const hasSignalN = autoN?.signal_active === true;
 
   // 4H state
   const v4h = a.l3['4h'].val, t4h = a.l3['4h'].trend;
@@ -5250,7 +5322,16 @@ function renderNarrativeLayers(ticker){
   document.getElementById('an-layer1-text').innerHTML = l1;
 
   // ── LAYER 2: The Cycle ──
-  let l2 = `<p>${ticker}'s DPO cycle fired a buy signal on <strong>${sigDateStr}</strong>. We are currently on <strong>Day ${cycleDay}</strong> of the cycle.`;
+  let l2;
+  if (hasSignalN) {
+    const perAssetDate = autoN.signal_date ? new Date(autoN.signal_date) : signalDate;
+    const perAssetDay  = autoN.signal_days_ago ?? cycleDay;
+    const perAssetDateStr = perAssetDate.toLocaleDateString('en-US',
+      {month:'short', day:'numeric', year:'numeric'});
+    l2 = `<p>${ticker}'s DPO cycle fired a buy signal on <strong>${perAssetDateStr}</strong>. We are currently on <strong>Day ${perAssetDay}</strong> of the cycle.`;
+  } else {
+    l2 = `<p>${ticker} has no active signal. Monitoring for entry conditions.`;
+  }
   if(zoneOpen){
     l2 += ` The accumulation window (Zone 2) is <strong style="color:var(--green)">OPEN</strong> — both the 1W (${a.l2['1w'].val.toFixed(0)}) and 2W (${a.l2['2w'].val.toFixed(0)}) oscillators are below 20. Entries during Zone 2 historically capture the majority of the cycle's upside.</p>`;
   } else {
@@ -5605,7 +5686,7 @@ function renderAutomation(ticker){
       narr += '⚠️ ' + ticker + ' is particularly sensitive to market regime. Historical performance drops sharply when trending. Consider waiting for cycling conditions to return.\n\n';
     }
   } else {
-    narr += `${ticker} — No active signal. Monitoring for both cycle indicators to drop below 20.\n`;
+    narr += `${ticker} — No active signal. Monitoring for both cycle indicators to reach the entry zone (below the 12th percentile).\n`;
     narr += `Current readings: 1W at ${dw}, 2W at ${d2}.\n`;
     if((auto.dpo_1w != null && auto.dpo_1w < 25) || (auto.dpo_2w != null && auto.dpo_2w < 25)){
       narr += 'Getting close — one indicator is approaching the buy zone.\n';
@@ -5851,7 +5932,7 @@ const PORTFOLIO_SYSTEM_PROMPT = `You are the MCAT Deep Analysis engine. You gene
 
 The MCAT system uses a three-layer decision framework:
 - Layer 1 (MQS — Macro Quality Score): Macro environment gate. GREEN/AMBER/RED tiers based on VIX, BTC vs 200MA, SPX vs 200MA, yen stability, and M2 money supply.
-- Layer 2 (DPO signals): Asset-level accumulation signals. Both DPO-20 and DPO-40 must drop below the 12th percentile (percentile rank normalization) for 2+ consecutive days. Asset must also be below its own 200MA at entry (v6 gate).
+- Layer 2 (DPO signals): Asset-level accumulation signals. Both DPO-20 and DPO-40 must drop below the 12th percentile (percentile rank normalization) for 2+ consecutive days. Asset must also be below its own 200MA — this gate is re-evaluated continuously against the current price, not just at entry (v6 gate).
 - Layer 3 (4H trigger): Precise entry timing using sub-daily indicators (not yet automated).
 
 ## DUAL DPO READINGS
@@ -5859,19 +5940,19 @@ The MCAT system uses a three-layer decision framework:
 You will receive two DPO readings per timeframe:
 - PERCENTILE RANK (0-100): This is what the system uses for decisions. Entry fires below 12. Overheated state above 90. Take Profits below 60.
 - MIN/MAX (0-100): This is what the user sees on dashboard cards. A different scale — do NOT compare min/max values against percentile thresholds.
-When discussing DPO levels with the user, reference the min/max display values (since that's what they see), but base your analytical judgment on the percentile rank values (since that's what drives the system).
+When discussing DPO levels with the user, reference the percentile rank values for active and suppressed signals — these are the system's logic values and what drives signal decisions. For approaching signals both percentile and display values are provided; use whichever is clearer in context.
 If only min/max values are available (percentile rank shows as unavailable), use those with the original thresholds (entry <20, OH >80).
 
 ## MQS RULES — ALL 10
 
 Rules 1-7 (original):
-1. VIX>45 + BTC bull → GREEN CAPITULATION (80-100% sizing) — rare extreme fear event
-2. VIX>30 + BTC bear + SPX co-bottom → GREEN (70-80%)
-3. VIX>30 + BTC bear → RED (20-25%)
-4. VIX 20-30 + BTC bear + SPX co-bottom → AMBER (50-60%)
-5. VIX 20-30 + BTC bull → GREEN (70-80%)
-6. VIX<20 + BTC bear + SPX bull → RED (20-30%) [v6: DEMOTED from AMBER — 12.5% hit rate, -13.8% avg in walk-forward]
-7. VIX<20 + BTC bull → GREEN (70-80%)
+1. VIX >45 → GREEN CAPITULATION (80-100%) — extreme fear, no BTC condition required
+2. SPX co-bottom within ±30d AND VIX <30 → RED (20-25%) — co-bottoming markets = conservative
+3. VIX 20-30 AND BTC bear → RED (20-25%) — moderate stress + bearish crypto
+4. VIX 20-30 AND BTC bull → AMBER (50-60%) — moderate macro, bullish crypto
+5. VIX 30-45 → AMBER (50-60%) — elevated stress regardless of BTC
+6. VIX <20 AND BTC bear AND no SPX co-bottom → RED (20-30%) [v6: DEMOTED from AMBER — 12.5% hit rate]
+7. VIX <20 AND BTC bull AND no SPX co-bottom → GREEN (70-80%) — ideal conditions
 
 Rules 8-10 (overrides):
 8. Yen unwind active → override to AMBER regardless of other conditions. Yen carry trade unwinding creates cross-asset volatility that suppresses signal quality.
@@ -5883,7 +5964,7 @@ Rules 8-10 (overrides):
 The following changes are baked into the system you are analyzing:
 - Rule 10 signals are suppressed — if a signal would fire during M2 contraction conditions, it is not shown.
 - Rule 6 is demoted to RED sizing (30%) — it performed like a RED rule in walk-forward testing.
-- Per-asset 200MA gate: signals only fire if the asset is below its own 200MA at entry time.
+- Per-asset 200MA gate: signals only fire if the asset is below its own 200MA, with the gate continuously re-evaluated against the current price.
 - Entry uses percentile rank normalization: both DPO-20 and DPO-40 must be below the 12th percentile (PC<12).
 - Two-stage exit: OVERHEATED (either DPO > 90th percentile) is a STATE FLAG, not an exit. TAKE PROFITS (both DPOs cool below 60th percentile after being overheated) is the actual exit that closes the signal.
 - 20% stop-loss: if price drops 20% below entry (daily close), the signal is stopped out.
@@ -5986,7 +6067,7 @@ When analyzing a specific asset in the portfolio context, use these behavioral n
 3. Provide BOTH accumulation and swing perspectives for every active signal.
 4. Connect the dots between indicators. If Hurst shifted regime during an active signal, SAY that and explain what it means.
 5. Use the per-asset behavioral profiles above. If ETH is active, note that its all-history EV is misleading and cite the post-2022 numbers. If HBAR is active, flag the structural concerns. If XLM or DASH is active, note ACCUMULATION ONLY.
-6. Be honest about risks — including the concentration risk finding (3 signals carry the system) and the 94.4% recovery context.
+6. Be honest about risks — including the concentration risk finding (3 signals carry the system: QNT Dec 2020 +72.4%, DOGE Mar 2021 +116.2%, QNT Apr 2021 +68.1% — the remaining 30 walk-forward signals are net negative) and the 94.4% recovery context.
 7. Reference specific numbers from the data provided.
 8. End with one clear "bottom line" sentence.
 9. Do NOT use headers, bullet points, or markdown formatting. Write in flowing paragraphs.
@@ -6004,7 +6085,7 @@ The MCAT system uses detrended price oscillators (DPOs) normalized to 0-100 scal
 You will receive two DPO readings per timeframe:
 - PERCENTILE RANK (0-100): This is what the system uses for decisions. Entry fires below 12. Overheated state above 90. Take Profits below 60.
 - MIN/MAX (0-100): This is what the user sees on dashboard cards. A different scale — do NOT compare min/max values against percentile thresholds.
-When discussing DPO levels with the user, reference the min/max display values (since that's what they see), but base your analytical judgment on the percentile rank values (since that's what drives the system).
+When discussing DPO levels with the user, reference the percentile rank values for active and suppressed signals — these are the system's logic values and what drives signal decisions. For approaching signals both percentile and display values are provided; use whichever is clearer in context.
 If only min/max values are available (percentile rank shows as unavailable), use those with the original thresholds (entry <20, OH >80).
 
 ## V6 CHANGES ACTIVE IN THIS SYSTEM
@@ -6158,8 +6239,8 @@ function buildPortfolioUserMessage() {
       msg += `Price: $${faFormatPrice(a.price)}. `;
       // Dual DPO format: percentile rank (system logic) | min/max (display)
       if (a.dpo20_pct !== null) {
-        msg += `DPO-20: ${faRound1(a.dpo20_pct)} percentile (threshold: <12) | Display: ${faRound1(a.dpo_1w)} (${a.trend_1w}). `;
-        msg += `DPO-40: ${faRound1(a.dpo40_pct)} percentile (threshold: <12) | Display: ${faRound1(a.dpo_2w)} (${a.trend_2w}). `;
+        msg += `DPO-20: ${faRound1(a.dpo20_pct)} percentile (entry threshold: PC<12). `;
+        msg += `DPO-40: ${faRound1(a.dpo40_pct)} percentile (entry threshold: PC<12). `;
       } else {
         msg += `DPO-20: ${faRound1(a.dpo_1w)} min/max (${a.trend_1w}), DPO-40: ${faRound1(a.dpo_2w)} min/max (${a.trend_2w}). [Percentile rank unavailable] `;
       }
@@ -6180,6 +6261,22 @@ function buildPortfolioUserMessage() {
     }
   } else {
     msg += `NO ACTIVE SIGNALS.\n`;
+  }
+
+  // Suppressed signals — pipeline-active but display-gated by v6 rules
+  const suppressedAssets = allAssets.filter(a => a.signal_active && v6SuppressSignal(a.ticker));
+  if (suppressedAssets.length > 0) {
+    const globalRule10 = getMqsTier().rule === 10;
+    msg += `\nSUPPRESSED SIGNALS (pipeline-active but gated from display by v6 rules):\n`;
+    for (const a of suppressedAssets) {
+      const reason = globalRule10
+        ? 'Rule 10 (M2 contracting — signal display suppressed)'
+        : (liveData[a.ticker]?.ma200_pct > 0 ? '200MA gate (asset currently above its 200MA)' : 'v6 gate');
+      msg += `${a.ticker}: Signal from ${a.signal_date} (Day ${a.signal_days_ago}). Gate: ${reason}. `;
+      if (a.dpo20_pct !== null) msg += `DPO-20: ${faRound1(a.dpo20_pct)} pct, DPO-40: ${faRound1(a.dpo40_pct)} pct. `;
+      msg += `Validated: ${a.validated ? 'yes' : 'NO'}.\n`;
+    }
+    msg += '\n';
   }
 
   const approaching = allAssets.filter(a =>
@@ -6220,9 +6317,9 @@ function buildPerAssetUserMessage(ticker) {
 
   msg += `DPO VALUES:\n`;
   if (a.dpo20_pct !== null) {
-    msg += `1D (DPO-7): ${faRound1(a.dpo7_pct)} percentile | Display: ${faRound1(a.dpo_7)}\n`;
-    msg += `1W (DPO-20): ${faRound1(a.dpo20_pct)} percentile (threshold: <12) | Display: ${faRound1(a.dpo_1w)} — ${a.trend_1w}\n`;
-    msg += `2W (DPO-40): ${faRound1(a.dpo40_pct)} percentile (threshold: <12) | Display: ${faRound1(a.dpo_2w)} — ${a.trend_2w}\n\n`;
+    msg += `1D (DPO-7): ${faRound1(a.dpo7_pct)} percentile\n`;
+    msg += `1W (DPO-20): ${faRound1(a.dpo20_pct)} percentile (entry threshold: PC<12)\n`;
+    msg += `2W (DPO-40): ${faRound1(a.dpo40_pct)} percentile (entry threshold: PC<12)\n\n`;
   } else {
     msg += `1D (DPO-7): ${faRound1(a.dpo_7)} min/max\n`;
     msg += `1W (DPO-20): ${faRound1(a.dpo_1w)} min/max — ${a.trend_1w}\n`;
@@ -6384,7 +6481,7 @@ function fpaBuildSignalStatus(a) {
       'EARLY_SIGNAL': 'Early stage — signal recently confirmed.',
       'ACCUMULATION': 'Accumulation phase — DPOs still in the buy zone.',
       'RISING': 'Rising — DPOs climbing out of the buy zone.',
-      'OVERHEATED': 'Overheated — at least one DPO has exceeded 80.',
+      'OVERHEATED': 'Overheated — at least one DPO has exceeded the 90th percentile.',
       'COOLING': 'Cooling — DPOs pulling back from overheated levels.',
       'TOPPED': 'Topped — cycle appears to have peaked.',
       'WAITING': 'Waiting for next cycle.'
@@ -7641,7 +7738,7 @@ function closeFullAnalysis() {
   <div style="width:34px;height:34px;border:3px solid #2e2e2e;border-top-color:var(--amber);
     border-radius:50%;animation:spin .8s linear infinite;"></div>
   <div style="font-family:'Space Mono',monospace;font-size:12px;color:#8a8a9a;">
-    Dr. Bob's MCAT v5.0 · Fetching Live Data...
+    Dr. Bob's MCAT v6.1 · Fetching Live Data...
   </div>
 </div>
 </body>
