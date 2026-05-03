@@ -31,6 +31,7 @@ from scipy import stats as scipy_stats
 
 
 # Custom JSON encoder for numpy types
+# NaN and Inf are not valid JSON — convert to None (serializes as null)
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, (np.bool_,)):
@@ -38,9 +39,11 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, (np.integer,)):
             return int(obj)
         if isinstance(obj, (np.floating,)):
-            return float(obj)
+            v = float(obj)
+            return None if (v != v or v == float('inf') or v == float('-inf')) else v
         if isinstance(obj, (np.ndarray,)):
-            return obj.tolist()
+            return [None if (isinstance(x, float) and (x != x or x == float('inf') or x == float('-inf'))) else x
+                    for x in obj.tolist()]
         return super().default(obj)
 
 
@@ -1425,6 +1428,15 @@ def run_pipeline(local_mode=False):
     with open("mcat_asset_states.json", "w") as f:
         json.dump(asset_states, f, indent=2, cls=NumpyEncoder)
 
+    # Strip raw DPO arrays before writing to KV.
+    # raw_dpo7/20/40 and prices contain NaN (invalid JSON) and are not needed
+    # by the dashboard — it only reads computed scalar values (value, dpo_1w, dpo_2w, hurst).
+    _STRIP = {'raw_dpo7', 'raw_dpo20', 'raw_dpo40', 'prices'}
+    def _strip_raw(d):
+        if not isinstance(d, dict):
+            return d
+        return {k: v for k, v in d.items() if k not in _STRIP}
+
     output = {
         "last_updated": now.isoformat(),
         "stale": len(errors) > 2,  # Mark stale if >2 sources failed
@@ -1435,13 +1447,13 @@ def run_pipeline(local_mode=False):
             "btc": btc,
             "usdjpy": usdjpy,
             "m2": m2,
-            "btc_1d_dpo": btc_dpo
+            "btc_1d_dpo": _strip_raw(btc_dpo)
         },
         "mqs": mqs,
         "confidence": confidence,
         "prices": {t: p["price"] for t, p in prices.items()},
         "price_changes_24h": {t: p["change_24h"] for t, p in prices.items()},
-        "asset_dpo_1d": {t: d for t, d in asset_dpos.items()},
+        "asset_dpo_1d": {t: _strip_raw(d) for t, d in asset_dpos.items()},
         "swing_signals": swing_signals,
         "asset_states": asset_states
     }
