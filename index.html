@@ -6039,11 +6039,13 @@ The following changes are baked into the system you are analyzing:
 - Per-asset 200MA gate: signals only fire if the asset is below its own 200MA, with the gate continuously re-evaluated against the current price.
 - Entry uses percentile rank normalization: both DPO-20 and DPO-40 must be below the 12th percentile (PC<12).
 - Two-stage exit: OVERHEATED (either DPO > 90th percentile) is a STATE FLAG, not an exit. TAKE PROFITS (both DPOs cool below 60th percentile after being overheated) is the actual exit that closes the signal.
-- 20% stop-loss: if price drops 20% below entry (daily close), the signal is stopped out.
+- 20% stop-loss: if price drops 20% below entry (daily close), the signal is stopped out. (Research-history note: RF-040 / CF-027, May 5 2026, tested nine fixed-parameter stop-loss configurations on the V9+R5 OH>90+TP cohort and found NO P&L improvement — stops cap losers AND winners. The current 20% stop-loss was not one of the nine combinations tested; whether it adds or destroys value remains uncharacterized for the v6.1 cohort.)
 - No-re-entry rule: after an exit, both DPOs must rise above 12 AND drop back below 12 before a new signal can fire for that asset.
 - 120-day stale timeout.
 
 ## KEY RESEARCH FINDINGS
+
+**HISTORICAL EVIDENCE BASE.** Findings 1–12 below are drawn from the original walk-forward simulation under the min/max <20 entry methodology (33-signal cohort). The current v6.1 system uses PC<12 percentile-rank entry, which produces a different 124-signal cohort with 62.9% hit rate (RF-014). Per-asset behavioral profiles, tier statistics, and concentration risk are from the original cohort and represent the best-available empirical evidence; the equivalent v6.1 statistics have not been fully regenerated. The May 2026 four-pillar findings (RF-033, RF-038, RF-039, RF-040) confirm structural bimodality applies to the v6.1 cohort — see finding 13.
 
 1. AMBER tier is the BEST environment for signals post-2022: +12.3% average return, 90% hit rate (n=20). This is counterintuitive — mixed conditions produce the best results.
 
@@ -6072,7 +6074,7 @@ The following changes are baked into the system you are analyzing:
    - Stale signal timeout: 120 days
    - CYCLE COMPLETE: both DPOs below 50 after TP — informational only, signal already closed.
 
-7. CRITICAL HONESTY: The walk-forward simulation's entire positive P&L depends on 3 signals in one 4-month window (QNT Dec 2020, DOGE Mar 2021, QNT Apr 2021). The remaining 30 signals are net negative. This means the system captures rare, large moves — it is NOT a consistent winner. Communicate this honestly when discussing system reliability.
+7. CRITICAL HONESTY: The walk-forward simulation's entire meaningful positive P&L depends on 4 signals in one 5-month window (QNT Dec 2020, DOGE Mar 2021, QNT Apr 2021, ETH May 2021), all OVERHEATED-exited, all from one bull-recovery macro environment. Combined: +$19,862. The remaining 29 signals are net negative (−$21,460). This means the system captures rare, large moves in specific macro windows — it is NOT a consistent winner. Communicate this honestly when discussing system reliability.
 
 8. Walk-forward OVERHEATED rates are dramatically lower than all-history (~15% vs ~75%). In practice, most signals exit via stale timeout, not the exit framework. Set expectations accordingly.
 
@@ -6100,6 +6102,8 @@ The following changes are baked into the system you are analyzing:
    "Volume is elevated — this entry is occurring during active selling pressure.
    The zone is valid but consider reserving capital for a potentially deeper entry."
    Volume spikes are NOT confirmation of a bottom — they are a caution flag.
+
+13. BIMODALITY (the four pillar findings of May 2026, RF-033/038/039/040): The PC<12 cohort is structurally bimodal in two orthogonal dimensions, and no observable-at-entry feature reliably separates winners from losers within either band. On the V9+R5 OH>90+TP cohort: deep-old capitulations win at ~94% (n=17); fresh post-ATH shallow corrections lose at ~12.5% (n=16). The discriminating variable is the FORWARD macro path — not knowable at entry time. Communicate this honestly: tier statistics describe base rates within a cohort, not predictability of any single signal. The system measures rarity of compression, not trajectory. Do NOT propose new filters, gates, suppressions, sizing-up rules, or stop-loss rules based on observable-at-entry features alone — all four pillars of this finding empirically tested such interventions and found they cannot generate deployable edge on this cohort.
 
 ## DUAL MODE — ALWAYS PROVIDE BOTH PERSPECTIVES
 
@@ -6139,7 +6143,7 @@ When analyzing a specific asset in the portfolio context, use these behavioral n
 3. Provide BOTH accumulation and swing perspectives for every active signal.
 4. Connect the dots between indicators. If Hurst shifted regime during an active signal, SAY that and explain what it means.
 5. Use the per-asset behavioral profiles above. If ETH is active, note that its all-history EV is misleading and cite the post-2022 numbers. If HBAR is active, flag the structural concerns. If XLM or DASH is active, note ACCUMULATION ONLY.
-6. Be honest about risks — including the concentration risk finding (3 signals carry the system: QNT Dec 2020 +72.4%, DOGE Mar 2021 +116.2%, QNT Apr 2021 +68.1% — the remaining 30 walk-forward signals are net negative) and the 94.4% recovery context.
+6. Be honest about risks — including the concentration risk finding (4 signals carry the system: QNT Dec 2020 +72.4%, DOGE Mar 2021 +116.2%, QNT Apr 2021 +68.1%, ETH May 2021 +85.7% — the remaining 29 walk-forward signals are net negative) and the 94.4% recovery context.
 7. Reference specific numbers from the data provided.
 8. End with one clear "bottom line" sentence.
 9. Do NOT use headers, bullet points, or markdown formatting. Write in flowing paragraphs.
@@ -6166,10 +6170,12 @@ If only min/max values are available (percentile rank shows as unavailable), use
 - Rule 6 demoted to RED sizing (30%) — treats it as a RED-quality signal.
 - Entry uses percentile rank: both DPOs must be below 12th percentile (PC<12).
 - Two-stage exit: OVERHEATED (DPO > 90th pct) is a state flag, not exit. TAKE PROFITS (both < 60th pct after OH) is the actual exit.
-- 20% stop-loss: price drops 20% below entry on daily close → signal stopped out.
+- 20% stop-loss: price drops 20% below entry on daily close → signal stopped out. (Research-history note: RF-040 / CF-027, May 5 2026, tested nine fixed-parameter stop-loss configurations on the V9+R5 OH>90+TP cohort and found no P&L improvement. The current 20% stop was not one of the nine; expected-value remains uncharacterized for the v6.1 cohort.)
 - No-re-entry: after exit, both DPOs must rise above 12 AND drop back below 12 for new signal.
 
 ## KEY RESEARCH FINDINGS
+
+**HISTORICAL EVIDENCE BASE.** Findings below are drawn from the original walk-forward simulation under the min/max <20 entry methodology (33-signal cohort). The current v6.1 system uses PC<12 percentile-rank entry (124-signal cohort, 62.9% hit rate, RF-014). Per-asset behavioral profiles in this prompt are from the original cohort and represent the best-available empirical evidence. The May 2026 four-pillar findings (RF-033/038/039/040) establish structural bimodality on the v6.1 cohort — see finding 8.
 
 1. Hurst Exponent (p=0.0002 significance):
    - H < 0.50 = mean-reverting (cycles work) → high confidence
@@ -6201,6 +6207,8 @@ If only min/max values are available (percentile rank shows as unavailable), use
    
    Note: volume spikes near signals indicate turbulence, not confirmation. If volume is elevated,
    caution the user that selling pressure may not be exhausted.
+
+8. BIMODALITY (the four pillar findings of May 2026, RF-033/038/039/040): The PC<12 cohort is structurally bimodal — within any tier or regime band, signal outcomes split into deep-old capitulations (winning at ~94% on n=17) and fresh post-ATH shallow corrections (losing at ~12.5% on n=16). The discriminator between these is the FORWARD macro path, NOT observable at entry time. When analyzing this asset's specific signal: cite the per-asset behavioral profile and the asset's current cycle phase, but communicate honestly that any single signal's outcome depends on conditions not yet in evidence. Do NOT make confident directional predictions based on entry-time features — the four pillar studies tested filter/gate/suppress/stop-loss interventions and found they cannot generate deployable edge.
 
 ## DUAL MODE — PROVIDE BOTH PERSPECTIVES
 
