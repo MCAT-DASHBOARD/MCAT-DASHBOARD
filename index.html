@@ -1673,6 +1673,9 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
           <div style="font-size:12px;color:#b0b0bc;line-height:1.6;margin-top:10px;">
             Tap the tier badge for details on the specific conditions driving the current classification. The individual indicators (VIX, BTC trend, SPX, M2, Yen) are shown for context — you don't need to interpret them individually. The tier badge already synthesizes them into a single recommendation. They're there so you can see <em>why</em> the system is classifying the environment the way it is.
           </div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+            <div class="guide-row"><span class="gk" style="background:rgba(176,136,255,0.12);color:var(--purple)">FEAR &amp; GREED</span><span style="font-size:13px;color:#d0d0d8;">A market-wide crypto sentiment gauge from 0 (extreme fear) to 100 (extreme greed). Shown for context only — it does <strong>not</strong> change the tier, the signal, or your position sizing. Extreme-fear readings have historically clustered near major cycle bottoms, but it describes market mood, not a buy trigger.<br><span style="color:#b0b0bc;font-size:10px;font-family:'Space Mono',monospace">Technical: alternative.me Fear &amp; Greed. &lt;25 = "extreme fear." Documented major bottoms (2018/2020/2022/2026) read 11&ndash;22 within &plusmn;14 days (RF-045, 4/4 recall, low precision). Descriptive, not a signal.</span></span></div>
+          </div>
         </div>
 
         <!-- Cycle Status Bar — full-width intro section -->
@@ -2021,6 +2024,14 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
         <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-m2-val">NEUTRAL</div>
         <div class="mqs-input-status" style="color:var(--sub)">FRED · 4–6wk lag</div>
       </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">FEAR &amp; GREED</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-fg-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-fg-status">unavailable</div>
+      </div>
+    </div>
+    <div style="font-size:10px;font-family:'Space Mono',monospace;color:#8a8a96;line-height:1.5;margin:2px 0 12px;">
+      Fear &amp; Greed context: historical documented major crypto bottoms (2018, 2020, 2022, 2026) showed F&amp;G readings of 11–22 within ±14 days of the bottom (RF-045, n=4/4 recall against documented bottoms). Descriptive context, not a signal.
     </div>
 
     <!-- Decision Path + Triggers — two-column row -->
@@ -2852,6 +2863,24 @@ function updateMqsDisplay() {
   if (m2Val) {
     m2Val.textContent = s.m2Expanding ? 'EXPANDING' : s.m2Contracting ? 'CONTRACTING' : 'NEUTRAL';
     m2Val.style.color = s.m2Expanding ? 'var(--green)' : s.m2Contracting ? 'var(--red)' : 'var(--sub)';
+  }
+
+  // Fear & Greed Index — INFORMATIONAL DISPLAY ONLY (RF-045).
+  // Reads the pipeline payload directly; does NOT touch MQS_STATE, tier
+  // logic, confidence, or signals. Graceful when the API was unavailable.
+  const fgVal = document.getElementById('mqs-input-fg-val');
+  const fgStatus = document.getElementById('mqs-input-fg-status');
+  if (fgVal && fgStatus) {
+    const fg = pipelineData && pipelineData.fear_greed_index;
+    if (fg && fg.value != null) {
+      fgVal.textContent = fg.value;
+      fgVal.style.color = 'var(--text)';
+      fgStatus.textContent = fg.classification || '';
+    } else {
+      fgVal.textContent = '—';
+      fgVal.style.color = 'var(--sub)';
+      fgStatus.textContent = 'unavailable · API offline';
+    }
   }
 
   // 6b. Decision Path
@@ -6326,6 +6355,13 @@ function buildPortfolioUserMessage() {
 
   msg += `MQS TIER: ${mqs.tier} (Rule ${mqs.rule}: ${mqs.ruleName || ''})\n`;
   msg += `VIX: ${MQS_STATE.vix || '—'}, BTC vs 200MA: ${MQS_STATE.btcMa200Pct || '?'}%\n`;
+  const fgPortfolio = pipelineData && pipelineData.fear_greed_index;
+  if (fgPortfolio && fgPortfolio.value != null) {
+    msg += `Fear & Greed Index: ${fgPortfolio.value} (${fgPortfolio.classification}). `;
+    msg += `Historical documented major crypto bottoms showed F&G readings of 11-22 (n=4/4 recall per RF-045). `;
+    msg += `Descriptive market-state context only — NOT a signal, NOT predictive, NOT a tier modifier. `;
+    msg += `Do not generate predictive language from this value alone or in confluence, and do not recommend action based on it.\n`;
+  }
   msg += `Position sizing guidance: ${mqs.sizing}\n`;
   // V6 P3: Wire plainDesc + overrideNote to Claude context
   if (mqs.plainDesc) msg += `MQS context: ${mqs.plainDesc}\n`;
@@ -6453,6 +6489,10 @@ function buildPerAssetUserMessage(ticker) {
   }
 
   msg += `\nMACRO: ${mqs.tier} tier, sizing ${mqs.sizing}\n`;
+  const fgAsset = pipelineData && pipelineData.fear_greed_index;
+  if (fgAsset && fgAsset.value != null) {
+    msg += `Fear & Greed Index: ${fgAsset.value} (${fgAsset.classification}). Historical documented major crypto bottoms showed F&G readings of 11-22 (n=4/4 recall per RF-045). Descriptive market-state context only — NOT a signal, NOT predictive, NOT a tier modifier. Do not generate predictive language from this value alone or in confluence, and do not recommend action based on it.\n`;
+  }
   // V6 P3: Wire plainDesc + overrideNote to Claude context
   if (mqs.plainDesc) msg += `MQS context: ${mqs.plainDesc}\n`;
   if (mqs.overrideNote) msg += `Override note: ${mqs.overrideNote}\n`;

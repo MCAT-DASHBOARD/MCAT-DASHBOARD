@@ -103,6 +103,42 @@ def fetch_vix():
         return {"value": None, "date": None, "source": "yahoo", "error": str(e)}
 
 
+def fetch_fear_greed():
+    """Fetch the Crypto Fear & Greed Index from alternative.me (free API).
+
+    Market-wide 0-100 sentiment indicator. INFORMATIONAL ONLY — does NOT
+    participate in tier classification, signal logic, confidence scoring, or
+    position sizing (see BUILD_BRIEF_FG_DASHBOARD.md / RF-045). Graceful on
+    failure: returns a null payload and never halts the pipeline.
+    """
+    print("  Fetching Fear & Greed Index...")
+    fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=30)
+        r.raise_for_status()
+        entry = r.json()["data"][0]
+        value = int(entry["value"])
+        classification = entry["value_classification"]
+        ts_iso = datetime.fromtimestamp(
+            int(entry["timestamp"]), tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"    Fear & Greed = {value} ({classification})")
+        return {
+            "value": value,
+            "classification": classification,
+            "timestamp": ts_iso,
+            "fetched_at": fetched_at,
+        }
+    except Exception as e:
+        print(f"    ⚠️ Fear & Greed fetch failed: {e}")
+        return {
+            "value": None,
+            "classification": "unavailable",
+            "timestamp": None,
+            "fetched_at": fetched_at,
+        }
+
+
 def fetch_spx():
     """Fetch SPX price + compute 200-day MA."""
     print("  Fetching SPX (S&P 500)...")
@@ -1190,6 +1226,9 @@ def run_pipeline(local_mode=False):
     usdjpy = fetch_usdjpy()
     time.sleep(2)  # CoinGecko rate limit
 
+    fear_greed = fetch_fear_greed()
+    time.sleep(1)
+
     print("\n[2/5] BTC 200-day data...")
     btc = fetch_btc_macro()
     time.sleep(2)
@@ -1452,6 +1491,7 @@ def run_pipeline(local_mode=False):
             "m2": m2,
             "btc_1d_dpo": _strip_raw(btc_dpo)
         },
+        "fear_greed_index": fear_greed,
         "mqs": mqs,
         "confidence": confidence,
         "prices": {t: p["price"] for t, p in prices.items()},
