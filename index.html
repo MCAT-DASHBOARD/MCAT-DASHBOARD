@@ -6015,6 +6015,12 @@ You will receive two DPO readings per timeframe:
 When discussing DPO levels with the user, reference the percentile rank values for active and suppressed signals — these are the system's logic values and what drives signal decisions. For approaching signals both percentile and display values are provided; use whichever is clearer in context.
 If only min/max values are available (percentile rank shows as unavailable), use those with the original thresholds (entry <20, OH >80).
 
+## DPO LABELING RULE (MANDATORY — prevents card self-contradiction)
+The two DPO series have DISTINCT names. Never mix them:
+- The PERCENTILE RANK values (the <12 / >90 / <60 decision values) must be called "DPO-20 percentile" and "DPO-40 percentile" (or "PC20" / "PC40"). When you state one, say the word "percentile" — e.g., "DPO-20 percentile rank is 12.2, just above the 12 entry threshold."
+- The MIN/MAX display values are what the dashboard cards label "1W DPO" and "2W DPO." Those two labels belong ONLY to the min/max display values.
+- NEVER attach "1W DPO" or "2W DPO" to a percentile-rank value, and never attach "percentile" to a min/max display value. If you reference both, name each explicitly so the reader can never confuse a 12.2 percentile with a 25.4 display value.
+
 ## MQS RULES — ALL 10
 
 Rules 1-7 (original):
@@ -6118,21 +6124,21 @@ For TAKE PROFITS: Accumulation = "bottom was real, core position intact." Swing 
 
 When analyzing a specific asset in the portfolio context, use these behavioral notes:
 
-**BTC:** Historically most reliable (97% OH all-history, 91% CC hit). Post-2022 ev90d +20.8% (reliable). Slow decay — holdable through exit framework. BUT: walk-forward only 1/4 OH exits. DPO compression from expanding window means system can miss major capitulation events (missed COVID crash by 1.6 DPO points). DCA improvement: 3.5pp (lowest — BTC signals are already well-timed).
+**BTC:** Historically most reliable (97% OH all-history, 91% CC hit). Post-2022 ev90d +20.8% (recent regime, smaller sample than all-history). Slow decay — holdable through exit framework. BUT: walk-forward only 1/4 OH exits. DPO compression from expanding window means system can miss major capitulation events (missed COVID crash by 1.6 DPO points). DCA improvement: 3.5pp (lowest — BTC signals are already well-timed).
 
-**ETH:** ALL-HISTORY evCC OF +300.9% IS MISLEADING — post-2022 CC is only +8.5%. Post-2022 ev90d is NEGATIVE (-1.4%). Best modern exit: Sell@80 (+15.8%). RED signals outperformed AMBER in walk-forward. RT is a strong discriminator (2/2 confirmed winners). All 3 Rule 6 AMBER signals showed declining returns (+85.7%, -17.5%, -40.3%).
+**ETH:** ALL-HISTORY evCC OF +300.9% IS MISLEADING — post-2022 CC is only +8.5%. Post-2022 ev90d is NEGATIVE (-1.4%). Best modern exit: Sell@80 (+15.8%). RED signals outperformed AMBER in walk-forward (n=3 RED, n=3 AMBER). RT was 2/2 in walk-forward confirmed (n=2). All 3 Rule 6 AMBER signals showed declining returns (+85.7%, -17.5%, -40.3%, n=3).
 
 **XRP:** 54% of signals NEVER reach overheated — highest never-OH rate with XLM. All-history ev90d +178.9% is MISLEADING — post-2022 is +7.6%, CC turns negative (-6.3%). Best modern exit: Sell@80 (+16.7%). Exit framework is counterproductive for XRP. RT is anti-correlated — confirmed signals lost money. Only RED winner in walk-forward.
 
-**XLM:** ACCUMULATION ONLY — swing trading unreliable. 55% never reach OH. Walk-forward: 0/3, complete structural failure. All-history ev90d +209.7% is MISLEADING — post-2022 is +3.7%. RT provides zero discrimination. All signals lost across all tiers in walk-forward. Valid as accumulation zone identifier (82% recovery) but do NOT recommend swing trades.
+**XLM:** ACCUMULATION ONLY — swing trading unreliable in walk-forward. 55% never reach OH (all-history). Walk-forward 0/3 (n=3). All-history ev90d +209.7% is MISLEADING — post-2022 is +3.7%. RT showed zero discrimination in walk-forward (n=3). All 3 walk-forward signals lost across the tiers they fired in. Valid as accumulation zone identifier (82% recovery) but do NOT recommend swing trades.
 
-**DOGE:** High variance — one +116.2% winner offset three losses. Post-2022 ev90d +30.0% (reliable, edge persists). Holdable through peaks (62% continuation). Rule 4 produced the winner; both Rule 6 signals lost.
+**DOGE:** High variance — one +116.2% winner offset three losses. Post-2022 ev90d +30.0% (recent regime, smaller sample than all-history). Holdable through peaks (62% continuation). Rule 4 produced the winner; both Rule 6 signals lost.
 
-**QNT:** Walk-forward BEST performer — 80% hit, +$5,253 profit. Post-2022 evCC +50.2% (best of any asset). RT is excellent discriminator (3/3 confirmed won). Performs across all tiers. Fast reversal after OH (32% continuation) — take profits quickly. Silent since Nov 2022 — possible normalization compression beginning.
+**QNT:** Walk-forward 4/5 hit (n=5), +$5,253 profit — highest single-asset P&L in walk-forward. Post-2022 evCC +50.2% (highest in cohort, recent regime, smaller sample than all-history). RT was 3/3 in walk-forward (n=3 confirmed). Fired in all three MQS tiers. Fast post-OH reversal (32% continuation in walk-forward) — historically take profits quickly. Silent since Nov 2022 — possible normalization compression beginning.
 
-**HBAR:** STRUCTURAL FAILURE — 0/5 walk-forward, -$5,668 loss. ev90d is NEGATIVE both all-history (-0.4%) and post-2022 (-3.8%). 0% post-OH continuation — NEVER continues rising after DPO>90th pct. RT provides zero discrimination. Lost money in every tier, every rule, every condition. Exit framework transforms -0.4% into +157.7% CC historically, but the framework fired 0 times in walk-forward. DCA improvement: 5.2pp (highest — DCA helps most here).
+**HBAR:** Walk-forward 0/5 (n=5), -$5,668 loss. ev90d is NEGATIVE both all-history (-0.4%) and post-2022 (-3.8%). 0% post-OH continuation in walk-forward (n=5) — has never continued rising after DPO>90th pct in observed history. RT showed zero discrimination in walk-forward (n=5). Walk-forward signals lost across every tier and rule combination they fired in. Exit framework transforms -0.4% into +157.7% CC historically, but framework fired 0 times in walk-forward. DCA improvement: 5.2pp (largest in cohort).
 
-**BNB:** Thinnest walk-forward profile (2 signals). All-history reliable across eras (post-2022 ev90d +11.2%). TP exit outperforms CC (unusual). 25% post-OH continuation — fast decay, take profits promptly. 4.5-year signal drought may indicate compression starting. DCA improvement: 3.5pp.
+**BNB:** Thinnest walk-forward profile (n=2 signals). Post-2022 ev90d +11.2% (recent regime, very small sample). TP exit outperformed CC in walk-forward (unusual). 25% post-OH continuation — historically fast decay. 4.5-year signal drought may indicate compression starting. DCA improvement: 3.5pp.
 
 **DASH:** ACCUMULATION ONLY — swing exits unreliable. INVISIBLE TO SYSTEM — zero walk-forward signals due to DPO compression from extreme 2014-2018 cycles. All 23 all-history signals are from earlier eras. Post-2022 ev90d is -13.5%. Only 1 TP exit in simulation (4 of 5 stale). Do NOT recommend swing trades for DASH.
 
@@ -6163,6 +6169,12 @@ You will receive two DPO readings per timeframe:
 - MIN/MAX (0-100): This is what the user sees on dashboard cards. A different scale — do NOT compare min/max values against percentile thresholds.
 When discussing DPO levels with the user, reference the percentile rank values for active and suppressed signals — these are the system's logic values and what drives signal decisions. For approaching signals both percentile and display values are provided; use whichever is clearer in context.
 If only min/max values are available (percentile rank shows as unavailable), use those with the original thresholds (entry <20, OH >80).
+
+## DPO LABELING RULE (MANDATORY — prevents card self-contradiction)
+The two DPO series have DISTINCT names. Never mix them:
+- The PERCENTILE RANK values (the <12 / >90 / <60 decision values) must be called "DPO-20 percentile" and "DPO-40 percentile" (or "PC20" / "PC40"). When you state one, say the word "percentile" — e.g., "DPO-20 percentile rank is 12.2, just above the 12 entry threshold."
+- The MIN/MAX display values are what the dashboard cards label "1W DPO" and "2W DPO." Those two labels belong ONLY to the min/max display values.
+- NEVER attach "1W DPO" or "2W DPO" to a percentile-rank value, and never attach "percentile" to a min/max display value. If you reference both, name each explicitly so the reader can never confuse a 12.2 percentile with a 25.4 display value.
 
 ## V6 CHANGES ACTIVE IN THIS SYSTEM
 
@@ -6219,21 +6231,21 @@ If asset is flagged ACCUMULATION ONLY (XLM, DASH), skip the swing perspective an
 
 ## PER-ASSET BEHAVIORAL PROFILES — USE THE ONE MATCHING THE ASSET BEING ANALYZED
 
-**BTC:** Post-2022 ev90d +20.8%, evCC +43.5% (reliable across eras). 97% OH all-history but only 25% in walk-forward. Slow decay (64% continuation after OH) — holdable. RT: no confirmed signals in walk-forward, cannot assess. DPO compression confirmed — missed COVID crash. DCA improvement: 3.5pp.
+**BTC:** Post-2022 ev90d +20.8%, evCC +43.5% (recent regime, smaller sample than all-history). 97% OH all-history but only 25% in walk-forward. Slow decay (64% continuation after OH) — holdable. RT: no confirmed signals in walk-forward, cannot assess. DPO compression confirmed — missed COVID crash. DCA improvement: 3.5pp.
 
-**ETH:** Post-2022 ev90d NEGATIVE (-1.4%), evCC only +8.5%. All-history +300.9% CC is misleading (2016-17 skew). Best modern exit: Sell@80 (+15.8%). RT: strong discriminator (2/2 confirmed won). RED outperformed AMBER. Rule 6 AMBER signals showed declining returns.
+**ETH:** Post-2022 ev90d NEGATIVE (-1.4%), evCC only +8.5%. All-history +300.9% CC is misleading (2016-17 skew). Best modern exit: Sell@80 (+15.8%). RT was 2/2 in walk-forward confirmed (n=2). RED outperformed AMBER in walk-forward (n=3 each). Rule 6 AMBER signals (n=3) showed declining returns.
 
 **XRP:** Post-2022 ev90d +7.6%, evCC NEGATIVE (-6.3%). 54% never reach OH. Exit framework counterproductive — 90d hold or Sell@80 (+16.7%) better. RT: anti-correlated (confirmed signals lost). Only RED signal won in walk-forward.
 
-**XLM:** ACCUMULATION ONLY. Post-2022 ev90d +3.7% (near zero). Walk-forward 0/3, structural failure. 55% never reach OH (worst). RT: zero discrimination. Valid accumulation zone identifier (82% recovery) but swing trades unreliable. Do NOT recommend swing exits.
+**XLM:** ACCUMULATION ONLY. Post-2022 ev90d +3.7% (near zero). Walk-forward 0/3 (n=3). 55% never reach OH (all-history, worst in cohort). RT showed zero discrimination in walk-forward (n=3). Valid accumulation zone identifier (82% recovery) but swing trades unreliable. Do NOT recommend swing exits.
 
-**DOGE:** Post-2022 ev90d +30.0% (reliable). High variance — one huge winner offsets losses. 62% continuation after OH — holdable. RT: directionally useful (50% confirmed vs 0% failed).
+**DOGE:** Post-2022 ev90d +30.0% (recent regime, smaller sample than all-history). High variance — one huge winner offsets losses in walk-forward. 62% continuation after OH — holdable. RT: directionally useful (50% confirmed vs 0% failed).
 
-**QNT:** Post-2022 evCC +50.2% (best of any asset). Walk-forward BEST: 80% hit, +$5,253. RT: excellent (3/3 confirmed won). Fast reversal after OH (32% continuation) — take profits quickly. Silent since Nov 2022.
+**QNT:** Post-2022 evCC +50.2% (highest in cohort, smaller sample than all-history). Walk-forward 4/5 hit (n=5), +$5,253. RT was 3/3 in walk-forward (n=3 confirmed). Historically fast post-OH reversal (32% continuation in walk-forward). Silent since Nov 2022.
 
-**HBAR:** ev90d NEGATIVE both eras (-0.4% all-history, -3.8% post-2022). Walk-forward 0/5 structural failure. 0% continuation after OH — IMMEDIATE exit when TP fires. RT: zero discrimination. Exit framework essential but fired 0 times in walk-forward. Losses are DPO-intrinsic. DCA improvement: 5.2pp (highest).
+**HBAR:** ev90d NEGATIVE both eras (-0.4% all-history, -3.8% post-2022). Walk-forward 0/5 (n=5). 0% continuation after OH in walk-forward (n=5). RT showed zero discrimination in walk-forward (n=5). Exit framework historically essential but fired 0 times in walk-forward. DCA improvement: 5.2pp (largest in cohort).
 
-**BNB:** Post-2022 ev90d +11.2% (reliable). TP outperforms CC (unusual). 25% continuation — fast decay. Only 2 walk-forward signals — thin validation. DCA improvement: 3.5pp.
+**BNB:** Post-2022 ev90d +11.2% (recent regime, very small sample). TP outperformed CC in walk-forward (unusual). 25% continuation in walk-forward (n=2 — thin). Only 2 walk-forward signals — thin validation. DCA improvement: 3.5pp.
 
 **DASH:** ACCUMULATION ONLY. Zero walk-forward signals — DPO compression from 2014-2018 extremes. System structurally cannot see DASH. Post-2022 ev90d -13.5%. Only 1 TP exit in simulation (4 of 5 stale). Do NOT recommend swing trades.
 
