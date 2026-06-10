@@ -844,16 +844,19 @@ def update_exit_level(asset_state, dpo20_today, dpo40_today, symbol, current_pri
 
     was_oh = asset_state.get('was_overheated', False)
 
+    # Track peak DPO40 continuously while a signal is active.
+    # (Bug 5 fix 2026-06-09: previously only updated inside the >90 block,
+    # so peaks went stale during RISING — e.g. ETH peak 27.0 vs live 85.9.)
+    peak = asset_state.get('peak_dpo40') or 0
+    if d40 > peak:
+        asset_state['peak_dpo40'] = d40
+        asset_state['peak_dpo40_date'] = date.today().isoformat()
+
     # Stage 1: Check for OVERHEATED state transition
     # EITHER DPO exceeding 90th percentile triggers the flag
     if d20 > 90 or d40 > 90:
         asset_state['was_overheated'] = True
         was_oh = True
-        # Track peak
-        peak = asset_state.get('peak_dpo40') or 0
-        if d40 > peak:
-            asset_state['peak_dpo40'] = d40
-            asset_state['peak_dpo40_date'] = date.today().isoformat()
 
     # Stage 2: TAKE_PROFITS — only fires AFTER overheated flag is set
     if was_oh and d20 < 60 and d40 < 60:

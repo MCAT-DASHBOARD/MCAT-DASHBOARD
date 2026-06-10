@@ -4451,11 +4451,20 @@ async function fetchAndUpdateAsset(ticker){
 async function fetchPipelineData(){
   if(!PROXY_URL) return;
   try{
-    const r = await fetch(PROXY_URL + '?action=getLiveData', {
-      headers: { 'Authorization': 'Bearer ' + MCAT_AUTH_TOKEN }
-    });
-    if(!r.ok) throw new Error('Pipeline fetch: ' + r.status);
-    const data = await r.json();
+    let data = null;
+    try{
+      const r = await fetch(PROXY_URL + '?action=getLiveData', {
+        headers: { 'Authorization': 'Bearer ' + MCAT_AUTH_TOKEN }
+      });
+      if(!r.ok) throw new Error('Pipeline fetch: ' + r.status);
+      data = await r.json();
+    }catch(workerEx){
+      console.warn('Worker pipeline fetch failed; falling back to brain_data.json:', workerEx.message);
+      const fb = await fetch('brain_data.json?t=' + Date.now(), {cache: 'no-store'});
+      if(!fb.ok) throw new Error('brain_data.json fallback: ' + fb.status);
+      data = await fb.json();
+      console.log('Pipeline data loaded from brain_data.json fallback. published_at:', data.published_at, 'stale flag:', data.stale);
+    }
     if(!data || !data.macro) return;
 
     pipelineData = data;
@@ -4550,7 +4559,7 @@ async function fetchPipelineData(){
       'Swing signals:', Object.entries(data.swing_signals || {}).filter(([k,v]) => v.state?.startsWith('ACTIVE')).map(([k]) => k).join(',') || 'none',
       'Automation:', Object.entries(data.asset_states || {}).filter(([k,v]) => v.cycle_phase !== 'WAITING').map(([k,v]) => `${k}:${v.cycle_phase}`).join(',') || 'none');
   } catch(ex){
-    console.warn('Pipeline fetch failed (using seed):', ex.message);
+    console.warn('Pipeline fetch failed — Worker AND brain_data.json both unreachable (using seed):', ex.message);
   }
 }
 
