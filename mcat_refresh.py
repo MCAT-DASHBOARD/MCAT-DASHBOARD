@@ -949,6 +949,122 @@ def update_re_entry_state(asset_state, dpo20_pct_today, dpo40_pct_today):
     return asset_state
 
 
+# ═══════════════════════════════════════════════════════════════
+#  FIX H (2026-06-10): EXIT-TIMING INSTRUMENTATION
+#  CORE research agenda #2 — measure oscillator deflation speed.
+#  Pure observation layer: appends events to asset_state['event_log']
+#  (capped at 30/asset, persists through signal close). Never alters
+#  signal, exit, phase, or sizing logic.
+# ═══════════════════════════════════════════════════════════════
+
+def _h_clean(v, nd=1):
+    """NaN-safe rounding for KV serialization (never write NaN to KV)."""
+    try:
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return None
+        return round(float(v), nd)
+    except (TypeError, ValueError):
+        return None
+
+
+def log_signal_events(state, pre, dpo20_pct, dpo40_pct, current_price=None):
+    """
+    Fix H: detect state transitions by diffing pre/post automation state;
+    append structured events to state['event_log']. Also tracks OVERHEATED
+    *episodes* independent of signals — deflation is measurable on any
+    asset, positioned or not (e.g. XLM June 2026).
+    """
+    today = date.today().isoformat()
+    log = state.setdefault('event_log', [])
+    d20 = _h_clean(dpo20_pct)
+    d40 = _h_clean(dpo40_pct)
+    px = _h_clean(current_price, 6)
+
+    # --- ENTRY: signal fired this run ---
+    if state.get('signal_active') and not pre.get('signal_active'):
+        state['oh_date'] = None
+        log.append({
+            'type': 'ENTRY', 'date': state.get('signal_date') or today,
+            'dpo20_pct': d20, 'dpo40_pct': d40, 'price': px,
+        })
+
+    # --- OH TRANSITION: was_overheated flipped this run ---
+    if state.get('was_overheated') and not pre.get('was_overheated'):
+        state['oh_date'] = today
+        days_since_entry = None
+        if state.get('signal_active') and state.get('signal_date'):
+            days_since_entry = (date.today() - date.fromisoformat(state['signal_date'])).days
+        log.append({
+            'type': 'OH_TRANSITION', 'date': today,
+            'dpo20_pct': d20, 'dpo40_pct': d40, 'price': px,
+            'days_since_entry': days_since_entry,
+        })
+
+    # --- EXIT: signal closed this run (TP / stop / stale / cycle end) ---
+    if pre.get('signal_active') and not state.get('signal_active'):
+        days_since_entry = None
+        if pre.get('signal_date'):
+            days_since_entry = (date.today() - date.fromisoformat(pre['signal_date'])).days
+        days_since_oh = None
+        if state.get('oh_date'):
+            days_since_oh = (date.today() - date.fromisoformat(state['oh_date'])).days
+        entry_px = _h_clean(state.get('entry_price'), 6)
+        pct_vs_entry = None
+        if entry_px and px:
+            pct_vs_entry = round((px / entry_px - 1.0) * 100, 2)
+        log.append({
+            'type': 'EXIT',
+            'exit_kind': state.get('exit_level') or 'CYCLE_END',
+            'date': today,
+            'dpo20_pct': d20, 'dpo40_pct': d40, 'price': px,
+            'days_since_entry': days_since_entry,
+            'days_since_oh': days_since_oh,
+            'peak_dpo40': _h_clean(state.get('peak_dpo40')),
+            'peak_dpo40_date': state.get('peak_dpo40_date'),
+            'entry_price': entry_px,
+            'pct_vs_entry': pct_vs_entry,
+        })
+
+    # --- OH EPISODE tracking (signal-independent deflation measurement) ---
+    d20n = dpo20_pct if dpo20_pct is not None and not (isinstance(dpo20_pct, float) and np.isnan(dpo20_pct)) else 50.0
+    d40n = dpo40_pct if dpo40_pct is not None and not (isinstance(dpo40_pct, float) and np.isnan(dpo40_pct)) else 50.0
+    ep = state.get('oh_episode')
+    if ep is None and (d20n > 90 or d40n > 90):
+        state['oh_episode'] = {
+            'start_date': today, 'start_dpo20': d20, 'start_dpo40': d40,
+            'peak_dpo40': d40, 'peak_dpo40_date': today,
+            'signal_active_at_start': bool(state.get('signal_active')),
+        }
+    elif ep is not None:
+        if d40 is not None and (ep.get('peak_dpo40') is None or d40 > ep['peak_dpo40']):
+            ep['peak_dpo40'] = d40
+            ep['peak_dpo40_date'] = today
+        if d20n < 60 and d40n < 60:
+            days_total = None
+            days_from_peak = None
+            try:
+                days_total = (date.today() - date.fromisoformat(ep['start_date'])).days
+                if ep.get('peak_dpo40_date'):
+                    days_from_peak = (date.today() - date.fromisoformat(ep['peak_dpo40_date'])).days
+            except (ValueError, TypeError):
+                pass
+            log.append({
+                'type': 'OH_EPISODE_END', 'date': today,
+                'start_date': ep.get('start_date'),
+                'peak_dpo40': ep.get('peak_dpo40'),
+                'peak_dpo40_date': ep.get('peak_dpo40_date'),
+                'end_dpo20': d20, 'end_dpo40': d40, 'price': px,
+                'days_start_to_end': days_total,
+                'days_peak_to_end': days_from_peak,
+                'signal_active_at_start': ep.get('signal_active_at_start'),
+            })
+            state['oh_episode'] = None
+
+    # Cap log size (KV hygiene)
+    state['event_log'] = log[-30:]
+    return state
+
+
 def process_asset_automation(symbol, dpo7_minmax, dpo20_minmax, dpo40_minmax,
                              dpo7_pct, dpo20_pct, dpo40_pct,
                              trend_1w, trend_2w,
@@ -964,12 +1080,22 @@ def process_asset_automation(symbol, dpo7_minmax, dpo20_minmax, dpo40_minmax,
     else:
         state = prev_state
 
+    # --- Fix H: snapshot pre-automation state for event detection ---
+    _pre = {
+        'signal_active': state.get('signal_active', False),
+        'was_overheated': state.get('was_overheated', False),
+        'signal_date': state.get('signal_date'),
+    }
+
     # Run automation pipeline in order — all logic uses PERCENTILE RANK values
     state = detect_signal(state, dpo20_pct, dpo40_pct, current_price)
     state = check_right_translation(state, dpo20_pct)
     state = update_cycle_phase(state, dpo20_pct, dpo40_pct)
     state = update_exit_level(state, dpo20_pct, dpo40_pct, symbol, current_price)
     state = update_re_entry_state(state, dpo20_pct, dpo40_pct)  # V6 C5: after exit level
+
+    # --- Fix H: exit-timing instrumentation (observation only) ---
+    state = log_signal_events(state, _pre, dpo20_pct, dpo40_pct, current_price)
 
     # Min/max values — backward-compatible display fields (existing KV field names)
     state['dpo_7'] = round(dpo7_minmax, 1) if dpo7_minmax is not None else None
