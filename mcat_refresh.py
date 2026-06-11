@@ -334,6 +334,204 @@ def fetch_crypto_prices():
         return {t: {"price": None, "change_24h": None} for t in CG_IDS}
 
 
+
+
+# ═══════════════════════════════════════════════════════════════
+#  FIX K (2026-06-11): MARKET-CONTEXT DESCRIPTORS
+#  Six informational indicators (RF-045 pattern: descriptor-only —
+#  ZERO participation in tiers, signals, confidence, or sizing).
+#  Every fetch is graceful-fail and can never halt the pipeline.
+# ═══════════════════════════════════════════════════════════════
+
+def fetch_btc_dominance():
+    """BTC market-cap dominance via CoinGecko /global (free, no key)."""
+    try:
+        r = requests.get(f"{CG_BASE}/global", headers=CG_HEADERS, timeout=30)
+        r.raise_for_status()
+        pct = r.json()["data"]["market_cap_percentage"]["btc"]
+        print(f"    BTC dominance = {pct:.1f}%")
+        return round(float(pct), 1)
+    except Exception as e:
+        print(f"    ⚠️ Dominance fetch failed: {e}")
+        return None
+
+
+def fetch_ath_context():
+    """Per-asset ATH stats via CoinGecko /coins/markets — ONE call for all assets.
+    Returns {ticker: {ath, ath_change_pct, ath_date, days_since_ath}}."""
+    out = {t: {"ath": None, "ath_change_pct": None, "ath_date": None, "days_since_ath": None}
+           for t in CG_IDS}
+    try:
+        ids = ",".join(CG_IDS.values())
+        url = f"{CG_BASE}/coins/markets?vs_currency=usd&ids={ids}&per_page=250"
+        r = requests.get(url, headers=CG_HEADERS, timeout=30)
+        r.raise_for_status()
+        by_id = {row.get("id"): row for row in r.json()}
+        today = datetime.now(timezone.utc).date()
+        for ticker, cg_id in CG_IDS.items():
+            row = by_id.get(cg_id)
+            if not row:
+                continue
+            ath = row.get("ath")
+            chg = row.get("ath_change_percentage")
+            ad = row.get("ath_date")
+            days = None
+            if ad:
+                try:
+                    days = (today - datetime.fromisoformat(ad.replace("Z", "+00:00")).date()).days
+                except (ValueError, TypeError):
+                    pass
+            out[ticker] = {
+                "ath": _h_clean(ath, 6),
+                "ath_change_pct": _h_clean(chg, 1),
+                "ath_date": ad[:10] if isinstance(ad, str) else None,
+                "days_since_ath": days,
+            }
+        got = sum(1 for v in out.values() if v["ath"] is not None)
+        print(f"    ATH context: {got}/{len(CG_IDS)} assets")
+    except Exception as e:
+        print(f"    ⚠️ ATH context fetch failed: {e}")
+    return out
+
+
+def compute_pi_cycle(closes):
+    """Pi Cycle Top proximity from daily closes (needs >= 350 points).
+    Classic definition: top signal when 111DMA crosses ABOVE 2x350DMA.
+    Returns gap of the 111DMA below the trigger line, as a percentage."""
+    try:
+        if closes is None or len(closes) < 350:
+            return {"ma111": None, "ma350x2": None, "gap_pct": None,
+                    "crossed": None, "note": "insufficient history"}
+        arr = np.asarray(closes, dtype=float)
+        ma111 = float(np.mean(arr[-111:]))
+        ma350x2 = float(np.mean(arr[-350:]) * 2.0)
+        gap_pct = round((ma350x2 - ma111) / ma350x2 * 100.0, 1)
+        crossed = bool(ma111 >= ma350x2)
+        return {"ma111": round(ma111, 0), "ma350x2": round(ma350x2, 0),
+                "gap_pct": gap_pct, "crossed": crossed, "note": None}
+    except Exception as e:
+        return {"ma111": None, "ma350x2": None, "gap_pct": None,
+                "crossed": None, "note": str(e)}
+
+
+def fetch_btc_365d_closes():
+    """365 days of BTC daily closes for Pi Cycle (one extra CG call, 429-tolerant)."""
+    for attempt in range(2):
+        try:
+            url = f"{CG_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=365"
+            r = requests.get(url, headers=CG_HEADERS, timeout=30)
+            if r.status_code == 429 and attempt == 0:
+                print("    ⏳ Pi Cycle fetch rate-limited, waiting 12s...")
+                time.sleep(12)
+                continue
+            r.raise_for_status()
+            return [p[1] for p in r.json()["prices"]]
+        except Exception as e:
+            print(f"    ⚠️ BTC 365d fetch failed: {e}")
+            return None
+    return None
+
+
+# Commonly-used heuristic bands. Display labels ONLY — these are base-rate
+# context descriptors, not predictions, gates, or sizing inputs (RF-045).
+def classify_mvrv_z(v):
+    if v is None: return "unavailable"
+    if v < 0: return "historic bottom zone"
+    if v < 2: return "low"
+    if v < 7: return "mid-range"
+    return "historic top zone"
+
+def classify_nupl(v):
+    if v is None: return "unavailable"
+    if v < 0: return "capitulation zone"
+    if v < 0.25: return "hope/fear"
+    if v < 0.5: return "optimism"
+    if v < 0.75: return "belief/greed"
+    return "euphoria (top zone)"
+
+def classify_puell(v):
+    if v is None: return "unavailable"
+    if v < 0.5: return "miner capitulation zone"
+    if v < 1.0: return "low"
+    if v < 4.0: return "mid-range"
+    return "historic top zone"
+
+
+def _bg_latest_value(payload, *keys):
+    """Defensively extract the most recent numeric value from a BGeometrics
+    response (list-of-dicts or dict). Tries the given keys in order."""
+    try:
+        row = payload[-1] if isinstance(payload, list) and payload else payload
+        if not isinstance(row, dict):
+            return None
+        for k in keys:
+            if k in row and row[k] is not None:
+                return float(row[k])
+        for k, v in row.items():  # fallback: first numeric non-date field
+            if k.lower() not in ("d", "date", "time", "timestamp", "unixts") :
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    continue
+    except Exception:
+        pass
+    return None
+
+
+def fetch_onchain_descriptors():
+    """BTC on-chain trio via the BGeometrics free API (key in BGEOMETRICS_API_KEY).
+    3 calls/day vs a 15/day free tier. Fully graceful: missing key or any
+    failure -> null values, pipeline continues."""
+    fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    out = {"mvrv_z": None, "mvrv_z_band": "unavailable",
+           "nupl": None, "nupl_band": "unavailable",
+           "puell": None, "puell_band": "unavailable",
+           "fetched_at": fetched_at, "error": None}
+    api_key = os.environ.get("BGEOMETRICS_API_KEY", "")
+    if not api_key:
+        out["error"] = "BGEOMETRICS_API_KEY not configured"
+        print("    ⚠️ BGEOMETRICS_API_KEY not set — skipping on-chain trio")
+        return out
+    # Auth format (Bearer) and /v1/ base CONFIRMED from bgeometrics.com 2026-06-11.
+    # COWORK: verify the three exact metric paths against the live docs at
+    # https://api.bgeometrics.com/scalar.html BEFORE committing (e.g. mvrv-zscore
+    # vs mvrv), adjust ONLY the path strings if they differ, then live-smoke-test each once.
+    endpoints = {
+        "mvrv_z": ("/v1/mvrv-zscore", ("mvrvZscore", "mvrv_zscore", "value")),
+        "nupl":   ("/v1/nupl",        ("nupl", "value")),
+        "puell":  ("/v1/puell-multiple", ("puellMultiple", "puell_multiple", "value")),
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+    for name, (path, keys) in endpoints.items():
+        try:
+            r = requests.get(f"https://api.bgeometrics.com{path}",
+                             headers=headers, timeout=30)
+            r.raise_for_status()
+            val = _bg_latest_value(r.json(), *keys)
+            out[name] = _h_clean(val, 3)
+            print(f"    {name} = {out[name]}")
+        except Exception as e:
+            print(f"    ⚠️ {name} fetch failed: {e}")
+            out["error"] = (out["error"] or "") + f"{name}:{e}; "
+    out["mvrv_z_band"] = classify_mvrv_z(out["mvrv_z"])
+    out["nupl_band"] = classify_nupl(out["nupl"])
+    out["puell_band"] = classify_puell(out["puell"])
+    return out
+
+
+def build_descriptors():
+    """Assemble the Fix K descriptor payload. Never raises."""
+    print("  Fetching market-context descriptors (Fix K)...")
+    desc = {"fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    desc["btc_dominance"] = fetch_btc_dominance()
+    time.sleep(3)
+    desc["ath"] = fetch_ath_context()
+    time.sleep(3)
+    desc["pi_cycle"] = compute_pi_cycle(fetch_btc_365d_closes())
+    desc["onchain"] = fetch_onchain_descriptors()
+    return desc
+
+
 # ═══════════════════════════════════════════════════════════════
 #  DPO PERCENTILE RANK NORMALIZATION (V6 C1)
 # ═══════════════════════════════════════════════════════════════
@@ -1400,6 +1598,7 @@ def run_pipeline(local_mode=False):
     time.sleep(2)  # CoinGecko rate limit
 
     fear_greed = fetch_fear_greed()
+    descriptors = build_descriptors()  # Fix K — informational only
     time.sleep(1)
 
     print("\n[2/5] BTC 200-day data...")
@@ -1683,6 +1882,7 @@ def run_pipeline(local_mode=False):
             "btc_1d_dpo": _strip_raw(btc_dpo)
         },
         "fear_greed_index": fear_greed,
+        "descriptors": descriptors,
         "mqs": mqs,
         "confidence": confidence,
         "prices": {t: p["price"] for t, p in prices.items()},

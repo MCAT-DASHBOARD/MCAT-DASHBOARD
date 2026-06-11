@@ -1675,6 +1675,7 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
           </div>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
             <div class="guide-row"><span class="gk" style="background:rgba(176,136,255,0.12);color:var(--purple)">FEAR &amp; GREED</span><span style="font-size:13px;color:#d0d0d8;">A market-wide crypto sentiment gauge from 0 (extreme fear) to 100 (extreme greed). Shown for context only — it does <strong>not</strong> change the tier, the signal, or your position sizing. Extreme-fear readings have historically clustered near major cycle bottoms, but it describes market mood, not a buy trigger.<br><span style="color:#b0b0bc;font-size:10px;font-family:'Space Mono',monospace">Technical: alternative.me Fear &amp; Greed. &lt;25 = "extreme fear." Documented major bottoms (2018/2020/2022/2026) read 11&ndash;22 within &plusmn;14 days (RF-045, 4/4 recall, low precision). Descriptive, not a signal.</span></span></div>
+            <div class="guide-row"><span class="gk" style="background:rgba(176,136,255,0.12);color:var(--purple)">ON-CHAIN &amp; CYCLE</span><span style="font-size:13px;color:#d0d0d8;">Five context descriptors: <strong>MVRV Z-Score</strong> (BTC market value vs realized value — extremes have marked cycle tops and bottoms), <strong>NUPL</strong> (aggregate unrealized profit/loss psychology), <strong>Puell Multiple</strong> (miner revenue stress), <strong>BTC dominance</strong> (risk rotation), and <strong>Pi Cycle</strong> (111-day vs 2&times;350-day average — a historical top marker). All are shown for context only — they do <strong>not</strong> change the tier, the signal, or position sizing, and none predicts any individual outcome.<br><span style="color:#b0b0bc;font-size:10px;font-family:'Space Mono',monospace">Technical: MVRV Z &lt;0 / NUPL &lt;0 / Puell &lt;0.5 = commonly-cited historic bottom zones; MVRV Z &ge;7 / NUPL &ge;0.75 / Puell &ge;4 = top zones. Heuristic base-rate bands, small historical samples (3&ndash;4 prior cycles). Sources: BGeometrics API (on-chain), CoinGecko (dominance), computed from BTC daily closes (Pi Cycle). Descriptors, not signals (RF-045 pattern).</span></span></div>
           </div>
         </div>
 
@@ -2028,6 +2029,31 @@ header{padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--bor
         <div class="mqs-input-label">FEAR &amp; GREED</div>
         <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-fg-val">—</div>
         <div class="mqs-input-status" id="mqs-input-fg-status">unavailable</div>
+      </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">MVRV Z (BTC)</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-mvrv-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-mvrv-status">unavailable</div>
+      </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">NUPL (BTC)</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-nupl-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-nupl-status">unavailable</div>
+      </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">PUELL</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-puell-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-puell-status">unavailable</div>
+      </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">BTC.D</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-btcd-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-btcd-status">dominance</div>
+      </div>
+      <div class="mqs-input-cell">
+        <div class="mqs-input-label">PI CYCLE</div>
+        <div class="mqs-input-val" style="color:var(--sub)" id="mqs-input-picycle-val">—</div>
+        <div class="mqs-input-status" id="mqs-input-picycle-status">gap to cross</div>
       </div>
     </div>
     <div style="font-size:10px;font-family:'Space Mono',monospace;color:#8a8a96;line-height:1.5;margin:2px 0 12px;">
@@ -2881,6 +2907,34 @@ function updateMqsDisplay() {
       fgVal.style.color = 'var(--sub)';
       fgStatus.textContent = 'unavailable · API offline';
     }
+  }
+
+  // Fix K: market-context descriptors — INFORMATIONAL DISPLAY ONLY (RF-045
+  // pattern). Never touches tiers, signals, confidence, or sizing.
+  const _desc = pipelineData && pipelineData.descriptors;
+  window._pipelineDescriptors = _desc || null;
+  function _setDesc(valId, statusId, val, band) {
+    const v = document.getElementById(valId), s = document.getElementById(statusId);
+    if (!v || !s) return;
+    if (val != null) {
+      v.textContent = val; v.style.color = 'var(--text)';
+      if (band != null) s.textContent = band;
+    } else {
+      v.textContent = '—'; v.style.color = 'var(--sub)';
+      s.textContent = 'unavailable';
+    }
+  }
+  if (_desc) {
+    const oc = _desc.onchain || {};
+    _setDesc('mqs-input-mvrv-val', 'mqs-input-mvrv-status', oc.mvrv_z, oc.mvrv_z_band);
+    _setDesc('mqs-input-nupl-val', 'mqs-input-nupl-status', oc.nupl, oc.nupl_band);
+    _setDesc('mqs-input-puell-val', 'mqs-input-puell-status', oc.puell, oc.puell_band);
+    _setDesc('mqs-input-btcd-val', 'mqs-input-btcd-status',
+      _desc.btc_dominance != null ? _desc.btc_dominance + '%' : null, 'dominance');
+    const pc = _desc.pi_cycle || {};
+    _setDesc('mqs-input-picycle-val', 'mqs-input-picycle-status',
+      pc.gap_pct != null ? pc.gap_pct + '%' : null,
+      pc.crossed ? 'CROSSED (top signal)' : 'gap to cross');
   }
 
   // 6b. Decision Path
@@ -6375,6 +6429,17 @@ function buildPortfolioUserMessage() {
     msg += `Descriptive market-state context only — NOT a signal, NOT predictive, NOT a tier modifier. `;
     msg += `Do not generate predictive language from this value alone or in confluence, and do not recommend action based on it.\n`;
   }
+  const _dP = window._pipelineDescriptors;
+  if (_dP) {
+    const oc = _dP.onchain || {}, pc = _dP.pi_cycle || {};
+    msg += `ON-CHAIN/CYCLE DESCRIPTORS (informational only — same rules as Fear & Greed above: NOT signals, NOT predictive, NOT tier/sizing modifiers; heuristic base-rate bands from 3-4 prior cycles): `;
+    if (oc.mvrv_z != null) msg += `MVRV Z ${oc.mvrv_z} (${oc.mvrv_z_band}). `;
+    if (oc.nupl != null) msg += `NUPL ${oc.nupl} (${oc.nupl_band}). `;
+    if (oc.puell != null) msg += `Puell ${oc.puell} (${oc.puell_band}). `;
+    if (_dP.btc_dominance != null) msg += `BTC dominance ${_dP.btc_dominance}%. `;
+    if (pc.gap_pct != null) msg += `Pi Cycle: 111DMA is ${pc.gap_pct}% below the 2x350DMA cross${pc.crossed ? ' — CROSSED (historical top marker)' : ''}. `;
+    msg += `\n`;
+  }
   msg += `Position sizing guidance: ${mqs.sizing}\n`;
   // V6 P3: Wire plainDesc + overrideNote to Claude context
   if (mqs.plainDesc) msg += `MQS context: ${mqs.plainDesc}\n`;
@@ -6505,6 +6570,10 @@ function buildPerAssetUserMessage(ticker) {
   const fgAsset = pipelineData && pipelineData.fear_greed_index;
   if (fgAsset && fgAsset.value != null) {
     msg += `Fear & Greed Index: ${fgAsset.value} (${fgAsset.classification}). Historical documented major crypto bottoms showed F&G readings of 11-22 (n=4/4 recall per RF-045). Descriptive market-state context only — NOT a signal, NOT predictive, NOT a tier modifier. Do not generate predictive language from this value alone or in confluence, and do not recommend action based on it.\n`;
+  }
+  const _athA = window._pipelineDescriptors && window._pipelineDescriptors.ath && window._pipelineDescriptors.ath[ticker];
+  if (_athA && _athA.ath_change_pct != null) {
+    msg += `ATH context: ${ticker} is ${Math.abs(_athA.ath_change_pct).toFixed(1)}% below its all-time high${_athA.days_since_ath != null ? ` (${_athA.days_since_ath} days since ATH)` : ''}. Depth-from-ATH is descriptive context for how historically extreme the current level is — a shallow pullback from ATH is NOT a cycle low (Nov 2025 lesson). Not a signal or sizing input.\n`;
   }
   // V6 P3: Wire plainDesc + overrideNote to Claude context
   if (mqs.plainDesc) msg += `MQS context: ${mqs.plainDesc}\n`;

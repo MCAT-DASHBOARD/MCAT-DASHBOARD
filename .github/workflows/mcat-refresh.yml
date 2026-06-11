@@ -31,6 +31,7 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_KV_NAMESPACE: ${{ secrets.CF_KV_NAMESPACE }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BGEOMETRICS_API_KEY: ${{ secrets.BGEOMETRICS_API_KEY }}
         run: python mcat_refresh.py
 
       - name: Upload output as artifact

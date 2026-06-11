@@ -188,3 +188,34 @@ def test_full_signal_lifecycle():
     assert any(e["type"] == "OH_EPISODE_END" for e in s["event_log"])
     s = day(s, 9.0, 9.0, 90.0)                                 # compressed again
     assert not s["signal_active"]                              # gated, no cascade re-entry
+
+
+# ── Fix K descriptors (pure functions only — fetches are graceful-fail) ──
+def test_pi_cycle_math():
+    closes = [100.0] * 400
+    r = m.compute_pi_cycle(closes)
+    assert r["ma111"] == 100 and r["ma350x2"] == 200
+    assert r["gap_pct"] == 50.0 and r["crossed"] is False
+    r2 = m.compute_pi_cycle([100.0] * 100)
+    assert r2["gap_pct"] is None and r2["note"] == "insufficient history"
+
+def test_descriptor_bands():
+    assert m.classify_mvrv_z(-0.5) == "historic bottom zone"
+    assert m.classify_mvrv_z(8.0) == "historic top zone"
+    assert m.classify_nupl(-0.1) == "capitulation zone"
+    assert m.classify_nupl(0.9) == "euphoria (top zone)"
+    assert m.classify_puell(0.3) == "miner capitulation zone"
+    assert m.classify_puell(None) == "unavailable"
+
+def test_bg_parser_defensive():
+    assert m._bg_latest_value([{"d": "2026-06-10", "nupl": 0.41}], "nupl") == 0.41
+    assert m._bg_latest_value({"mvrvZscore": 1.2}, "mvrvZscore") == 1.2
+    assert m._bg_latest_value([{"d": "x", "weird": "0.7"}], "missing") == 0.7
+    assert m._bg_latest_value([], "v") is None
+    assert m._bg_latest_value("garbage", "v") is None
+
+def test_onchain_graceful_without_key(monkeypatch):
+    monkeypatch.delenv("BGEOMETRICS_API_KEY", raising=False)
+    out = m.fetch_onchain_descriptors()
+    assert out["mvrv_z"] is None and out["error"] == "BGEOMETRICS_API_KEY not configured"
+    assert out["mvrv_z_band"] == "unavailable"
