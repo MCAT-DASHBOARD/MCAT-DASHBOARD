@@ -1133,8 +1133,12 @@ def process_asset_automation(symbol, dpo7_minmax, dpo20_minmax, dpo40_minmax,
     # Run automation pipeline in order — all logic uses PERCENTILE RANK values
     state = detect_signal(state, dpo20_pct, dpo40_pct, current_price)
     state = check_right_translation(state, dpo20_pct)
-    state = update_cycle_phase(state, dpo20_pct, dpo40_pct)
+    # Fix N (2026-06-11): exit level MUST be evaluated BEFORE the phase machine —
+    # update_cycle_phase clears was_overheated on the cool-down day, which made
+    # TAKE_PROFITS unreachable and left the C5 re-entry gate permanently disengaged
+    # for TP-class exits (found by the Fix M test suite's first run).
     state = update_exit_level(state, dpo20_pct, dpo40_pct, symbol, current_price)
+    state = update_cycle_phase(state, dpo20_pct, dpo40_pct)
     state = update_re_entry_state(state, dpo20_pct, dpo40_pct)  # V6 C5: after exit level
 
     # --- Fix H: exit-timing instrumentation (observation only) ---

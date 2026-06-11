@@ -1,0 +1,31 @@
+name: MCAT State Machine Tests
+
+# Fix M (2026-06-11): runs the synthetic state-machine test suite on every
+# push that touches the pipeline or the tests. No network, no secrets needed.
+on:
+  push:
+    paths:
+      - 'mcat_refresh.py'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run state-machine tests
+        run: python -m pytest tests/ -v
