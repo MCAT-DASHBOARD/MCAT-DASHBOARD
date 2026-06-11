@@ -11,6 +11,17 @@ from datetime import date
 import mcat_refresh as m
 
 
+
+# ── Fix O test infrastructure: controllable calendar date ──
+import datetime as _dt
+
+def _set_today(monkeypatch, iso):
+    class _FakeDate(_dt.date):
+        @classmethod
+        def today(cls):
+            return _dt.date.fromisoformat(iso)
+    monkeypatch.setattr(m, "date", _FakeDate)
+
 def fresh_state(**over):
     s = dict(m.DEFAULT_STATE)
     s.update(over)
@@ -18,10 +29,12 @@ def fresh_state(**over):
 
 
 # ── detect_signal ────────────────────────────────────────────────
-def test_signal_requires_two_cluster_days():
+def test_signal_requires_two_cluster_days(monkeypatch):
     s = fresh_state()
+    _set_today(monkeypatch, "2026-06-01")
     s = m.detect_signal(s, 10.0, 11.0, 100.0)
     assert s["cluster_days"] == 1 and not s["signal_active"]
+    _set_today(monkeypatch, "2026-06-02")
     s = m.detect_signal(s, 9.0, 10.0, 100.0)
     assert s["signal_active"] and s["entry_price"] == 100.0
     assert s["was_overheated"] is False and s["peak_dpo40"] == 10.0
@@ -32,15 +45,19 @@ def test_no_fire_when_only_one_oscillator_compressed():
         s = m.detect_signal(s, 9.0, 30.0, 100.0)  # PC40 above line
     assert not s["signal_active"] and s["cluster_days"] == 0
 
-def test_cooldown_blocks_refire_within_30_days():
-    s = fresh_state(signal_active=False, signal_date=date.today().isoformat())
+def test_cooldown_blocks_refire_within_30_days(monkeypatch):
+    _set_today(monkeypatch, "2026-06-01")
+    s = fresh_state(signal_active=False, signal_date="2026-06-01")
     s = m.detect_signal(s, 9.0, 9.0, 100.0)
+    _set_today(monkeypatch, "2026-06-02")
     s = m.detect_signal(s, 9.0, 9.0, 100.0)
     assert not s["signal_active"]  # cluster=2 but cooldown blocks
 
-def test_re_entry_gate_blocks_fire():
+def test_re_entry_gate_blocks_fire(monkeypatch):
     s = fresh_state(re_entry_state="BLOCKED")
+    _set_today(monkeypatch, "2026-06-01")
     s = m.detect_signal(s, 9.0, 9.0, 100.0)
+    _set_today(monkeypatch, "2026-06-02")
     s = m.detect_signal(s, 9.0, 9.0, 100.0)
     assert not s["signal_active"] and s["cluster_days"] == 2
 
@@ -164,13 +181,17 @@ def test_confidence_scoring():
 
 
 # ── Full lifecycle through the orchestrator ──────────────────────
-def test_full_signal_lifecycle():
+def test_full_signal_lifecycle(monkeypatch):
     # Regression guard for Fix N (2026-06-11): before N, update_cycle_phase ran first
     # and cleared was_overheated on the cool-down day, making TAKE_PROFITS unreachable
     # and leaving the C5 re-entry gate disengaged. This test fails if that ever returns.
-    day = lambda st, d20, d40, px: m.process_asset_automation(
-        "TST", 50.0, d20, d40, 50.0, d20, d40, "flat", "flat",
-        current_price=px, prev_state=st)
+    _days = ["2026-06-0%d" % i for i in range(1, 10)]
+    _i = [0]
+    def day(st, d20, d40, px):
+        _set_today(monkeypatch, _days[_i[0]]); _i[0] += 1
+        return m.process_asset_automation(
+            "TST", 50.0, d20, d40, 50.0, d20, d40, "flat", "flat",
+            current_price=px, prev_state=st)
     s = day(None, 10.0, 11.0, 100.0)
     assert not s["signal_active"] and s["cluster_days"] == 1
     s = day(s, 9.0, 10.0, 100.0)
@@ -219,3 +240,26 @@ def test_onchain_graceful_without_key(monkeypatch):
     out = m.fetch_onchain_descriptors()
     assert out["mvrv_z"] is None and out["error"] == "BGEOMETRICS_API_KEY not configured"
     assert out["mvrv_z_band"] == "unavailable"
+
+
+# ── Fix O: date-aware cluster (12h cadence safety) ──
+def test_cluster_one_increment_per_calendar_day(monkeypatch):
+    s = fresh_state()
+    _set_today(monkeypatch, "2026-06-01")
+    s = m.detect_signal(s, 9.0, 9.0, 100.0)
+    s = m.detect_signal(s, 9.0, 9.0, 100.0)   # second run, SAME day
+    assert s["cluster_days"] == 1 and not s["signal_active"]
+    _set_today(monkeypatch, "2026-06-02")
+    s = m.detect_signal(s, 9.0, 9.0, 100.0)   # next day -> 2 -> fires
+    assert s["cluster_days"] == 2 and s["signal_active"]
+
+def test_cluster_resets_on_intraday_bounce(monkeypatch):
+    s = fresh_state()
+    _set_today(monkeypatch, "2026-06-01")
+    s = m.detect_signal(s, 9.0, 9.0, 100.0)
+    assert s["cluster_days"] == 1
+    s = m.detect_signal(s, 30.0, 30.0, 100.0)  # same-day bounce above threshold
+    assert s["cluster_days"] == 0 and s["cluster_last_date"] is None
+    _set_today(monkeypatch, "2026-06-02")
+    s = m.detect_signal(s, 9.0, 9.0, 100.0)
+    assert s["cluster_days"] == 1 and not s["signal_active"]  # strict: restart

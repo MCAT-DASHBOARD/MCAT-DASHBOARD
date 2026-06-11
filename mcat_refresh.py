@@ -886,6 +886,7 @@ DEFAULT_STATE = {
     'signal_date': None,
     'signal_days_ago': 0,
     'cluster_days': 0,
+    'cluster_last_date': None,   # Fix O: date-aware clustering (12h cadence safe)
     'dpo20_at_day5': None,
     'right_translation': None,
     'rt_check_date': None,
@@ -924,9 +925,13 @@ def detect_signal(asset_state, dpo20_today, dpo40_today, current_price=None):
         both_below = (dpo20_today is not None and dpo40_today is not None
                       and dpo20_today < THRESHOLD and dpo40_today < THRESHOLD)
         if both_below:
-            asset_state['cluster_days'] = asset_state.get('cluster_days', 0) + 1
+            # Fix O: one increment per calendar day, at any run cadence
+            if asset_state.get('cluster_last_date') != date.today().isoformat():
+                asset_state['cluster_days'] = asset_state.get('cluster_days', 0) + 1
+                asset_state['cluster_last_date'] = date.today().isoformat()
         else:
             asset_state['cluster_days'] = 0
+            asset_state['cluster_last_date'] = None
         if asset_state.get('signal_active') and asset_state.get('signal_date'):
             asset_state['signal_days_ago'] = (date.today() - date.fromisoformat(asset_state['signal_date'])).days
         return asset_state
@@ -936,7 +941,12 @@ def detect_signal(asset_state, dpo20_today, dpo40_today, current_price=None):
     today = date.today()
 
     if both_below:
-        asset_state['cluster_days'] = asset_state.get('cluster_days', 0) + 1
+        # Fix O (2026-06-11): date-aware cluster — increments at most once per
+        # calendar day so MIN_CLUSTER means DAYS of compression at any run
+        # cadence. Any non-compressed observation still resets to 0 (strict).
+        if asset_state.get('cluster_last_date') != today.isoformat():
+            asset_state['cluster_days'] = asset_state.get('cluster_days', 0) + 1
+            asset_state['cluster_last_date'] = today.isoformat()
 
         if asset_state['cluster_days'] >= MIN_CLUSTER:
             # Check 30-day cooldown
@@ -961,6 +971,7 @@ def detect_signal(asset_state, dpo20_today, dpo40_today, current_price=None):
                 asset_state['re_entry_state'] = 'ELIGIBLE'  # V6 C5: Initialize
     else:
         asset_state['cluster_days'] = 0
+        asset_state['cluster_last_date'] = None
 
     if asset_state.get('signal_active') and asset_state.get('signal_date'):
         asset_state['signal_days_ago'] = (today - date.fromisoformat(asset_state['signal_date'])).days

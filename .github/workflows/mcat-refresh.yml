@@ -2,7 +2,7 @@ name: MCAT Data Refresh
 
 on:
   schedule:
-    - cron: '0 11 * * *'
+    - cron: '23 8,20 * * *'   # Fix O: twice daily — fresh for AM + evening consults (GitHub delays runs up to ~3.5h past schedule)
   workflow_dispatch:
 
 env:
