@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write                      # required to commit brain_data.json back to repo
+  issues: write                        # Fix I: required to open alert issues
 
 jobs:
   publish-brain-data:
@@ -113,3 +114,56 @@ jobs:
             git push
             echo "✅ brain_data.json committed and pushed. GitHub Pages will serve the updated file within ~1 minute."
           fi
+
+      # ── 5. MCAT alerting — open a GitHub Issue on signal events (Fix I) ────
+      # GitHub natively emails the repo owner on new issues = free alerting.
+      # continue-on-error: a failed alert must never block publishing.
+      - name: Create alert issue on signal events
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+
+          today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+          data = json.load(open('brain_data.json'))
+          states = data.get('asset_states', {}) or {}
+
+          lines = []
+          for sym, s in states.items():
+              for ev in (s.get('event_log') or []):
+                  if ev.get('date') == today:
+                      lines.append(f"- **{sym} {ev.get('type')}** — `{json.dumps(ev)}`")
+              cd = s.get('cluster_days') or 0
+              if cd >= 1:
+                  lines.append(f"- **{sym} PRE-SIGNAL: cluster_days={cd}** (both percentiles <12 — canonical signal fires at 2)")
+
+          if not lines:
+              print('No alert conditions today — skipping issue.')
+              raise SystemExit(0)
+
+          title = f"MCAT Alert — {today}"
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/issues?state=open&per_page=50",
+              headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'})
+          existing = json.load(urllib.request.urlopen(req))
+          if any(i.get('title') == title for i in existing):
+              print('Alert issue for today already exists — skipping.')
+              raise SystemExit(0)
+
+          body = ("Automated MCAT alert (Fix I).\n\n" + "\n".join(lines) +
+                  "\n\nDashboard: https://mcat-dashboard.github.io/MCAT-DASHBOARD/\n"
+                  f"Data: published_at {data.get('published_at')}")
+          payload = json.dumps({'title': title, 'body': body}).encode()
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/issues", data=payload, method='POST',
+              headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
+                       'Content-Type': 'application/json'})
+          resp = json.load(urllib.request.urlopen(req))
+          print(f"✅ Alert issue created: {resp.get('html_url')}")
+          PYEOF

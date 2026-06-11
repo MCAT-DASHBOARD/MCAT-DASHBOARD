@@ -705,8 +705,6 @@ BOOTSTRAP = {
     'BTC':  {'signal_active': True, 'signal_date': '2026-02-13', 'cycle_phase': 'EARLY_SIGNAL'},
     'ETH':  {'signal_active': True, 'signal_date': '2026-02-06', 'cycle_phase': 'EARLY_SIGNAL'},
     'XRP':  {'signal_active': True, 'signal_date': '2026-02-06', 'cycle_phase': 'EARLY_SIGNAL'},
-    'BNB':  {'signal_active': True, 'signal_date': '2026-02-06', 'cycle_phase': 'EARLY_SIGNAL'},
-    'DASH': {'signal_active': True, 'signal_date': '2026-02-13', 'cycle_phase': 'EARLY_SIGNAL'},
     'XLM':  {'signal_active': True, 'signal_date': '2026-01-01', 'cycle_phase': 'ACCUMULATION'},
 }
 
@@ -1059,6 +1057,51 @@ def log_signal_events(state, pre, dpo20_pct, dpo40_pct, current_price=None):
                 'signal_active_at_start': ep.get('signal_active_at_start'),
             })
             state['oh_episode'] = None
+
+    # --- NEAR-MISS episode tracking (Fix I; threshold-precision agenda #1) ---
+    # Opens when either oscillator compresses below 15 with no active signal;
+    # records the minimum both reached; closes (one event) when both recover
+    # above 17 (hysteresis), or with fired=True if a signal fires.
+    nm = state.get('nm_episode')
+    if not state.get('signal_active'):
+        if nm is None and (d20n < 15 or d40n < 15):
+            state['nm_episode'] = {
+                'start_date': today, 'min_dpo20': d20, 'min_dpo20_date': today,
+                'min_dpo40': d40, 'min_dpo40_date': today,
+            }
+        elif nm is not None:
+            if d20 is not None and (nm.get('min_dpo20') is None or d20 < nm['min_dpo20']):
+                nm['min_dpo20'] = d20
+                nm['min_dpo20_date'] = today
+            if d40 is not None and (nm.get('min_dpo40') is None or d40 < nm['min_dpo40']):
+                nm['min_dpo40'] = d40
+                nm['min_dpo40_date'] = today
+            if d20n >= 17 and d40n >= 17:
+                days_nm = None
+                try:
+                    days_nm = (date.today() - date.fromisoformat(nm['start_date'])).days
+                except (ValueError, TypeError, KeyError):
+                    pass
+                log.append({
+                    'type': 'NEAR_MISS_END', 'date': today,
+                    'start_date': nm.get('start_date'),
+                    'min_dpo20': nm.get('min_dpo20'), 'min_dpo20_date': nm.get('min_dpo20_date'),
+                    'min_dpo40': nm.get('min_dpo40'), 'min_dpo40_date': nm.get('min_dpo40_date'),
+                    'end_dpo20': d20, 'end_dpo40': d40,
+                    'days_in_zone': days_nm, 'fired': False,
+                })
+                state['nm_episode'] = None
+    else:
+        if nm is not None:
+            log.append({
+                'type': 'NEAR_MISS_END', 'date': today,
+                'start_date': nm.get('start_date'),
+                'min_dpo20': nm.get('min_dpo20'), 'min_dpo20_date': nm.get('min_dpo20_date'),
+                'min_dpo40': nm.get('min_dpo40'), 'min_dpo40_date': nm.get('min_dpo40_date'),
+                'end_dpo20': d20, 'end_dpo40': d40,
+                'days_in_zone': None, 'fired': True,
+            })
+            state['nm_episode'] = None
 
     # Cap log size (KV hygiene)
     state['event_log'] = log[-30:]
@@ -1589,6 +1632,24 @@ def run_pipeline(local_mode=False):
             rt_str = f"RT={'YES' if rt else 'NO'}" if rt is not None else "RT=pending"
             exit_str = f" EXIT={exit_lv}" if exit_lv else ""
             print(f"    {ticker}: {phase} (signal {sig_date}, day {days}, {rt_str}{exit_str})")
+
+    # --- Fix I: honest portfolio confidence (replaces hardcoded placeholder) ---
+    # Mirrors the dashboard's logic on the BTC anchor: percentile <12 both when
+    # available, else min/max <20 both. (Field name kept for compatibility.)
+    _btc_s = asset_states.get('BTC', {})
+    _b20p, _b40p = _btc_s.get('dpo20_pct'), _btc_s.get('dpo40_pct')
+    if _b20p is not None and _b40p is not None:
+        _dpo_both = (_b20p < 12 and _b40p < 12)
+    else:
+        _b1w, _b2w = _btc_s.get('dpo_1w'), _btc_s.get('dpo_2w')
+        _dpo_both = (_b1w is not None and _b2w is not None and _b1w < 20 and _b2w < 20)
+    confidence = compute_confidence(
+        dpo_both_below_20=_dpo_both,
+        btc_above_200ma=btc_above,
+        spx_above_200ma=spx_above,
+        right_translation="pending"
+    )
+    print(f"  Confidence (honest recompute): {confidence['score']}/{confidence['max']} (BTC dpo component: {_dpo_both})")
 
     # Write asset states to KV
     if not local_mode:
