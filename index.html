@@ -3167,13 +3167,14 @@ function updateContextStrip() {
   const z2CloseStr = z2CloseDate.toLocaleDateString('en-US', {month:'short', day:'numeric'});
   const sigDateStr = signalDate.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
 
-  // Update Day counter
+  // Update Day counter (Fix L: explicit no-signal state — never count a closed signal)
+  const _noActive = !!(window._pipelineAssetStates && activeSignalCount === 0);
   const dayEl = document.getElementById('ctx-day-num');
-  if (dayEl) dayEl.textContent = 'DAY ' + dayNum;
+  if (dayEl) dayEl.textContent = _noActive ? 'DAY —' : ('DAY ' + dayNum);
 
-  // Update progress dot position
+  // Update progress dot position (parked at start when no active signal)
   const dotEl = document.getElementById('ctx-prog-dot');
-  if (dotEl) dotEl.style.left = Math.min(95, Math.max(2, (dayNum / cycleMean) * 100)) + '%';
+  if (dotEl) dotEl.style.left = _noActive ? '2%' : (Math.min(95, Math.max(2, (dayNum / cycleMean) * 100)) + '%');
 
   // Update the Day Counter tooltip with current signal info
   const dayTipEl = document.getElementById('ctx-day-tooltip-tech');
@@ -3224,12 +3225,21 @@ function updateContextStrip() {
     }
   }
 
-  // Update zone pill if Zone 2 has closed
-  if (daysToZ2Close === 0 && activeSignalCount > 0) {
-    const zonePill = document.getElementById('ctx-zone-pill');
-    if (zonePill) {
+  // Update zone pill (Fix L: full state handling, incl. no-active-signal)
+  const zonePill = document.getElementById('ctx-zone-pill');
+  if (zonePill) {
+    if (window._pipelineAssetStates && activeSignalCount === 0) {
+      zonePill.textContent = 'No Active Signal';
+      zonePill.className = 'ctx-pill ctx-pill-grey';
+    } else if (daysToZ2Close === 0) {
       zonePill.textContent = 'Zone 3 Active';
       zonePill.className = 'ctx-pill ctx-pill-red';
+    } else if (dayNum >= 5) {
+      zonePill.textContent = 'Zone 2 Active';
+      zonePill.className = 'ctx-pill ctx-pill-green';
+    } else {
+      zonePill.textContent = 'Zone 1 Active';
+      zonePill.className = 'ctx-pill ctx-pill-green';
     }
   }
 
@@ -4583,6 +4593,9 @@ async function fetchPipelineData(){
     }
 
     updateMqsDisplay();
+    // Fix L: re-render the context strip now that pipeline data is loaded
+    // (it first renders pre-fetch and otherwise never updates — stale-counter bug)
+    if (typeof updateContextStrip === 'function') updateContextStrip();
     console.log('Pipeline data loaded:', data.mqs?.tier, 'VIX:', m.vix?.value,
       'BTC 1D DPO:', m.btc_1d_dpo?.value,
       'Swing signals:', Object.entries(data.swing_signals || {}).filter(([k,v]) => v.state?.startsWith('ACTIVE')).map(([k]) => k).join(',') || 'none',
@@ -5271,7 +5284,7 @@ function getMqsNarrative(mqs, ticker) {
     return 'Capitulation conditions detected (VIX above 45). This is the rarest and highest-conviction setup in the system. Historically, signals during capitulation events produce extraordinary returns. Full position sizing is warranted.';
   }
   if (mqs.tier === 'AMBER') {
-    return 'Signals in AMBER conditions have a 90% hit rate post-2022 (n=20). This is historically the best environment for accumulation signals \u2014 counterintuitively better than calm GREEN markets. The data supports confident positioning at 50\u201375% of intended allocation.';
+    return 'Signals in AMBER conditions have a 90% hit rate post-2022 (n=20, recent regime \u2014 small sample). Historically AMBER produced the strongest accumulation-cohort results in the backtest, counterintuitively ahead of calm GREEN markets. This is a base rate, not a per-signal prediction; sizing guidance: 50\u201375% of intended allocation.';
   }
   if (mqs.tier === 'GREEN') {
     return 'Markets are calm (GREEN tier), but post-2022 data shows calm conditions produce weaker signals: 34% hit rate, -7.2% average EV (n=29). Routine pullbacks in bull markets often aren\u2019t real opportunities. Conservative sizing recommended.';
