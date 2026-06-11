@@ -5287,7 +5287,7 @@ function getMqsEvLine(mqs, ticker) {
   if (!stats) {
     return 'Asset EV: not available (unvalidated asset) \u00b7 Tier EV: ' + (mqs.ev != null ? (mqs.ev > 0 ? '+' : '') + mqs.ev + '%' : '\u2014');
   }
-  return 'Asset EV (CC exit): +' + stats.evCC + '% \u00b7 Tier EV: ' + (mqs.ev > 0 ? '+' : '') + mqs.ev + '%';
+  return 'Asset EV (CC exit): +' + stats.evCC + '% (all-history) \u00b7 Tier EV: ' + (mqs.ev > 0 ? '+' : '') + mqs.ev + '% (all-history base rate)';
 }
 
 function renderMqsMacroContext(ticker) {
@@ -5532,7 +5532,7 @@ function renderNarrativeLayers(ticker){
 
   // Confidence components
   l5 += `<p style="margin-top:10px;font-size:11px;color:var(--sub)"><strong>Confidence breakdown:</strong> `;
-  l5 += `DPO both &lt;20: ${conf.components.dpo_both_below_20 ? '✅' : '⭕'} · `;
+  l5 += `DPO compressed (PC&lt;12): ${conf.components.dpo_both_below_20 ? '✅' : '⭕'} · `;
   l5 += `BTC above 200MA: ${conf.components.btc_above_200ma ? '✅' : '⭕'} · `;
   l5 += `SPX above 200MA: ${conf.components.spx_above_200ma ? '✅' : '⭕'} · `;
   l5 += `Right translation: ${conf.components.right_translation ? '✅ confirmed' : '⏳ pending'}`;
@@ -6185,7 +6185,7 @@ When analyzing a specific asset in the portfolio context, use these behavioral n
 1. Write 3-5 paragraphs of analysis. Be direct and actionable.
 2. Start with the most important thing — what should Dr. Bob DO right now?
 3. Provide BOTH accumulation and swing perspectives for every active signal.
-4. Connect the dots between indicators. If Hurst shifted regime during an active signal, SAY that and explain what it means.
+4. Connect the dots between indicators. If Hurst shifted regime during an active signal, SAY that and explain what it means. Treat Hurst regime labels as rough context, not precise classification — the 90-day single-window estimate is noisy and a single reading can misclassify the regime.
 5. Use the per-asset behavioral profiles above. If ETH is active, note that its all-history EV is misleading and cite the post-2022 numbers. If HBAR is active, flag the structural concerns. If XLM or DASH is active, note ACCUMULATION ONLY.
 6. Be honest about risks — including the concentration risk finding (4 signals carry the system: QNT Dec 2020 +72.4%, DOGE Mar 2021 +116.2%, QNT Apr 2021 +68.1%, ETH May 2021 +85.7% — the remaining 29 walk-forward signals are net negative) and the 94.4% recovery context.
 7. Reference specific numbers from the data provided.
@@ -6382,7 +6382,7 @@ function buildPortfolioUserMessage() {
         msg += `DPO-20: ${faRound1(a.dpo_1w)} min/max (${a.trend_1w}), DPO-40: ${faRound1(a.dpo_2w)} min/max (${a.trend_2w}). [Percentile rank unavailable] `;
       }
       msg += `Hurst: ${a.hurst_90 !== null ? a.hurst_90.toFixed(4) : 'unavailable'} (${a.hurst_regime}, conf: ${a.hurst_confidence}). `;
-      msg += `Weekly RSI: ${a.weekly_rsi !== null ? a.weekly_rsi.toFixed(1) : 'unavailable'}`;
+      msg += `Weekly RSI (completed weeks): ${a.weekly_rsi !== null ? a.weekly_rsi.toFixed(1) : 'unavailable'}`;
       if (a.weekly_rsi !== null && a.weekly_rsi < 35) {
         msg += ` — OVERSOLD (rare capitulation-level, historically within 3% of actual low)`;
       } else if (a.weekly_rsi !== null && a.weekly_rsi < 45) {
@@ -7149,25 +7149,26 @@ function faBuildMacroSection() {
 
   if (tier === 'GREEN' && mqs.rule === 1) {
     macroText += `VIX has spiked above 45 to ${vix} — this is a capitulation event. `
-      + `Historically, this is the strongest possible setup with 100% hit rate. `
+      + `Historically the highest-performing setup in the backtest — 100% hit rate, but n=4 (tiny sample; treat as base rate, not certainty). `
       + `Position sizing: 80-100% of intended allocation.`;
   } else if (tier === 'GREEN') {
     macroText += `Conditions are calm — VIX at ${vix}, `
       + `BTC ${btcAbove ? 'above' : 'below'} its 200-day average`
       + `${spxAbove !== undefined ? ', SPX ' + (spxAbove ? 'above' : 'below') + ' its 200MA' : ''}. `
       + `Position sizing: ${mqs.sizing || '70-80%'} of intended allocation. `
-      + `Expected 90-day return: +${mqs.ev}% (${mqs.hitRate}% hit rate).`;
+      + `All-history backtest: +${mqs.ev}% avg 90-day return (${mqs.hitRate}% hit rate) — a base rate, not a per-signal prediction.`;
   } else if (tier === 'AMBER') {
     macroText += `Mixed signals — VIX at ${vix}, `
       + `BTC ${btcAbove ? 'above' : 'below'} its 200-day average (${s.btcMa200Pct > 0 ? '+' : ''}${s.btcMa200Pct || '?'}%). `
-      + `Historically, AMBER is the best environment for accumulation signals — `
-      + `post-2022: +12.3% average return with 90% hit rate. `
+      + `Historically AMBER produced the strongest accumulation-cohort results in the backtest — `
+      + `post-2022: +12.3% average return, 90% hit (recent regime, small sample). `
       + `Position sizing: ${mqs.sizing || '50-60%'} of intended allocation.`;
   } else if (tier === 'RED') {
     macroText += `Elevated risk — VIX at ${vix}, `
       + `BTC ${btcAbove ? 'above' : 'below'} its 200-day average (${s.btcMa200Pct > 0 ? '+' : ''}${s.btcMa200Pct || '?'}%). `
-      + `Signals in RED conditions still have positive expected value (+${mqs.ev}%) `
-      + `but require conservative sizing: ${mqs.sizing || '20-25%'} of intended allocation.`;
+      + `RED-tier signals showed positive expected value in the all-history backtest (+${mqs.ev}%), `
+      + `but walk-forward RED results were materially weaker — treat as a base rate, not a prediction — `
+      + `and sizing stays conservative: ${mqs.sizing || '20-25%'} of intended allocation.`;
   }
 
   return `<div class="fa-section">
