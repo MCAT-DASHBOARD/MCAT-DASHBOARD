@@ -6197,9 +6197,9 @@ The following changes are baked into the system you are analyzing:
    RSI measures momentum exhaustion — fundamentally different from DPO's structural deviation.
    They almost never agree (only 4% overlap at oversold levels). When they do, it's significant.
    
-   - RSI < 35: HIGH CONFIDENCE — rare capitulation-level reading. Only 4% of signals reach this.
-     Historical entries with RSI<35 entered within 3% of the actual cycle low (vs 21% typically).
-     This is a once-per-cycle event. Communicate elevated conviction to the user.
+   - RSI < 35: rare capitulation-level reading — only 4% of signals reach this (n=5 historical entries).
+     Those five entries came within 3% of the actual cycle low (vs 21% typically). Descriptive base
+     rate from a small sample — do not present as elevated conviction for any single signal (bimodality, RF-038/039/040).
    - RSI 35-45: MODERATE — momentum approaching oversold. Valid zone entry, standard DCA.
    - RSI > 45: STANDARD — DPO identifies the zone but momentum is neutral. 83% of signals
      fall here. This is normal operation. Proceed with standard confidence.
@@ -6207,8 +6207,8 @@ The following changes are baked into the system you are analyzing:
    RSI is a confidence classifier, NOT a filter. All DPO signals are valid regardless of RSI.
 
 12. Volume Caution (daily aggregate volume):
-   Volume spikes near DPO signals predict WORSE short-term outcomes, not better.
-   Spikes mark turbulence and panic — the selling may not be finished.
+   Volume spikes near DPO signals were associated with WORSE short-term outcomes in the studied cohort (descriptive, not predictive — RF-023).
+   Spikes marked turbulence and panic in the studied cohort — descriptive, not directional.
    If volume is notably elevated near a signal entry, note this to the user:
    "Volume is elevated — this entry is occurring during active selling pressure.
    The zone is valid but consider reserving capital for a potentially deeper entry."
@@ -6229,7 +6229,7 @@ For TAKE PROFITS: Accumulation = "bottom was real, core position intact." Swing 
 
 When analyzing a specific asset in the portfolio context, use these behavioral notes:
 
-**BTC:** Historically most reliable (97% OH all-history, 91% CC hit). Post-2022 ev90d +20.8% (recent regime, smaller sample than all-history). Slow decay — holdable through exit framework. BUT: walk-forward only 1/4 OH exits. DPO compression from expanding window means system can miss major capitulation events (missed COVID crash by 1.6 DPO points). DCA improvement: 3.5pp (lowest — BTC signals are already well-timed).
+**BTC:** Historically most reliable (97% OH all-history, 91% CC hit). Post-2022 ev90d +20.8% (recent regime, smaller sample than all-history). Slow decay — holdable through exit framework. BUT: walk-forward only 1/4 OH exits. DPO compression means the system can miss major capitulation events (missed COVID crash by 1.6 DPO points). DCA improvement: 3.5pp (lowest — BTC signals are already well-timed).
 
 **ETH:** ALL-HISTORY evCC OF +300.9% IS MISLEADING — post-2022 CC is only +8.5%. Post-2022 ev90d is NEGATIVE (-1.4%). Best modern exit: Sell@80 (+15.8%). RED signals outperformed AMBER in walk-forward (n=3 RED, n=3 AMBER). RT was 2/2 in walk-forward confirmed (n=2). All 3 Rule 6 AMBER signals showed declining returns (+85.7%, -17.5%, -40.3%, n=3).
 
@@ -6316,14 +6316,14 @@ The two DPO series have DISTINCT names. Never mix them:
 
 7. Weekly RSI Confidence (14-period weekly):
    RSI measures momentum exhaustion — independent from DPO. When both agree (RSI<35 at DPO signal),
-   it marks rare capitulation. Use the RSI reading provided to set confidence level:
-   RSI < 35 → tell user this is high-conviction, historically within 3% of actual bottom.
+   it marks rare capitulation. Frame the RSI reading as a descriptive base rate:
+   RSI < 35 → note this is a rare reading (4% of signals, n=5) whose historical entries came within 3% of the actual bottom; descriptive base rate, not a conviction weight.
    RSI 35-45 → moderate, approaching oversold.
    RSI > 45 → standard zone entry, most common type (83% of signals).
    RSI is a confidence classifier, NOT a filter. All DPO signals are valid regardless of RSI.
    
    Note: volume spikes near signals indicate turbulence, not confirmation. If volume is elevated,
-   caution the user that selling pressure may not be exhausted.
+   note that in the studied cohort volume spikes were associated with worse short-term outcomes (RF-023); descriptive, not directional.
 
 8. BIMODALITY (the four pillar findings of May 2026, RF-033/038/039/040): The PC<12 cohort is structurally bimodal — within any tier or regime band, signal outcomes split into deep-old capitulations (winning at ~94% on n=17) and fresh post-ATH shallow corrections (losing at ~12.5% on n=16). The discriminator between these is the FORWARD macro path, NOT observable at entry time. When analyzing this asset's specific signal: cite the per-asset behavioral profile and the asset's current cycle phase, but communicate honestly that any single signal's outcome depends on conditions not yet in evidence. Do NOT make confident directional predictions based on entry-time features — the four pillar studies tested filter/gate/suppress/stop-loss interventions and found they cannot generate deployable edge.
 
